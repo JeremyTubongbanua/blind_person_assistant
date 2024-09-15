@@ -1,6 +1,6 @@
 # blind_person_assistant
 
-Submission for ENGR 4940U/4941U Capstone System Design
+Project submission for ENGR 4940U/4941U Capstone System Design
 
 ## Authors
 
