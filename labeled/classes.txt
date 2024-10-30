@@ -4,3 +4,4 @@ garbage_can
 door
 exit_sign
 general_sign
+wet_floor_sign
