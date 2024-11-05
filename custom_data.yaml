@@ -1,5 +1,5 @@
-train: /Users/jeremytubongbanua/GitHub/blind_person_assistant/dataset/images/train
-val: /Users/jeremytubongbanua/GitHub/blind_person_assistant/dataset/images/test
+train: /content/dataset/images/train
+val: /content/dataset/images/test
 
 nc: 7
 names: ['person', 'pole', 'garbage_can', 'door', 'exit_sign', 'general_sign', 'wet_floor_sign']
