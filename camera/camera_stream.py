@@ -86,6 +86,18 @@ camRgb.setInterleaved(False)
 camRgb.setColorOrder(dai.ColorCameraProperties.ColorOrder.BGR)
 camRgb.setFps(40)
 
+# ----------------------------------------------------------------------------
+# Insert an ImageManip node to flip the camera image 180 degrees
+# ----------------------------------------------------------------------------
+imgManip = pipeline.create(dai.node.ImageManip)
+# Instead of a rotation method, flip both horizontally and vertically.
+imgManip.initialConfig.setHorizontalFlip(True)
+imgManip.initialConfig.setVerticalFlip(True)
+# Enforce the output resolution to match the model input.
+imgManip.initialConfig.setResize(W, H)
+# Set the maximum output frame size (BGR: 3 bytes per pixel).
+imgManip.setMaxOutputFrameSize(W * H * 3)
+
 # Mono camera properties for stereo depth
 monoLeft.setResolution(dai.MonoCameraProperties.SensorResolution.THE_400_P)
 monoRight.setResolution(dai.MonoCameraProperties.SensorResolution.THE_400_P)
@@ -108,8 +120,14 @@ detectionNetwork.setIouThreshold(iouThreshold)
 detectionNetwork.setNumInferenceThreads(2)
 detectionNetwork.input.setBlocking(False)
 
-# Linking
-camRgb.preview.link(detectionNetwork.input)
+# ----------------------------------------------------------------------------
+# Pipeline Linking
+# Instead of linking camRgb.preview directly to the network, we pass it through
+# the ImageManip node so that the image is flipped before inference.
+# ----------------------------------------------------------------------------
+camRgb.preview.link(imgManip.inputImage)
+imgManip.out.link(detectionNetwork.input)
+
 detectionNetwork.passthrough.link(xoutRgb.input)
 detectionNetwork.out.link(nnOut.input)
 
@@ -119,7 +137,7 @@ stereo.depth.link(xoutDepth.input)
 
 def frameNorm(frame, bbox):
     """
-    Converts normalized bbox to absolute pixel values
+    Converts normalized bbox to absolute pixel values.
     """
     normVals = np.full(len(bbox), frame.shape[0])
     normVals[::2] = frame.shape[1]
@@ -128,11 +146,11 @@ def frameNorm(frame, bbox):
 def draw_detections(frame, detections, depthFrame):
     color = (255, 0, 0)
     for detection in detections:
-        # Draw bounding box
+        # Draw bounding box.
         bbox = frameNorm(frame, (detection.xmin, detection.ymin, detection.xmax, detection.ymax))
         cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), color, 2)
 
-        # Label
+        # Label.
         if detection.label < len(labels):
             label_text = labels[detection.label]
         else:
@@ -144,7 +162,7 @@ def draw_detections(frame, detections, depthFrame):
             (bbox[0] + 10, bbox[1] + 20),
             cv2.FONT_HERSHEY_TRIPLEX,
             0.5,
-            (255,255,255),
+            (255, 255, 255),
             1
         )
         cv2.putText(
@@ -153,34 +171,33 @@ def draw_detections(frame, detections, depthFrame):
             (bbox[0] + 10, bbox[1] + 40),
             cv2.FONT_HERSHEY_TRIPLEX,
             0.5,
-            (255,255,255),
+            (255, 255, 255),
             1
         )
 
-        # Calculate and display distance (if depth frame is available)
+        # Calculate and display distance (if depth frame is available).
         if depthFrame is not None:
             x1, y1, x2, y2 = bbox
             depth_slice = depthFrame[y1:y2, x1:x2]
 
-            # Safety check in case slice is empty
+            # Safety check in case the slice is empty.
             if depth_slice.size > 0:
                 depth_val = np.median(depth_slice)
                 if not np.isnan(depth_val):
-                    distance = depth_val / 1000.0  # Convert from mm to meters
+                    distance = depth_val / 1000.0  # Convert from mm to meters.
                     cv2.putText(
                         frame,
                         f"Dist: {distance:.2f}m",
                         (bbox[0] + 10, bbox[1] + 60),
                         cv2.FONT_HERSHEY_TRIPLEX,
                         0.5,
-                        (255,255,255),
+                        (255, 255, 255),
                         1
                     )
 
 def run_pipeline():
     """
-    Runs the DepthAI pipeline in a loop
-    and updates the global 'latest_frame'.
+    Runs the DepthAI pipeline in a loop and updates the global 'latest_frame'.
     """
     global latest_frame
     with dai.Device(pipeline) as device:
@@ -200,7 +217,7 @@ def run_pipeline():
 
             if inRgb is not None:
                 frame = inRgb.getCvFrame()
-                # Optional: show FPS
+                # Optional: show FPS.
                 cv2.putText(
                     frame,
                     "NN fps: {:.2f}".format(counter / (time.monotonic() - startTime)),
@@ -218,10 +235,10 @@ def run_pipeline():
                 depthFrame = inDepth.getFrame()
 
             if inRgb is not None:
-                # Draw detections onto the frame
+                # Draw detections onto the frame.
                 draw_detections(frame, detections, depthFrame)
 
-                # Update the global latest_frame with a lock for thread safety
+                # Update the global latest_frame with a lock for thread safety.
                 with lock:
                     latest_frame = frame.copy()
 
@@ -233,18 +250,15 @@ def generate_frames():
     Generator function that yields frames in a multipart HTTP response.
     """
     while True:
-        # Use the global latest_frame
         with lock:
             if latest_frame is None:
                 continue
             frame_copy = latest_frame.copy()
 
-        # Encode the frame in JPEG format
         ret, buffer = cv2.imencode('.jpg', frame_copy)
         if not ret:
             continue
 
-        # Build the response (multipart/x-mixed-replace)
         frame_bytes = buffer.tobytes()
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
@@ -261,9 +275,6 @@ def video_stream():
 # Main
 # ---------------------------
 if __name__ == '__main__':
-    # Start DepthAI pipeline thread
     pipeline_thread = threading.Thread(target=run_pipeline, daemon=True)
     pipeline_thread.start()
-
-    # Run Flask app on port 8005
     app.run(host='0.0.0.0', port=8005, debug=False, threaded=True)
