@@ -10,6 +10,8 @@ import json
 import blobconverter
 from flask import Flask, Response
 import threading
+import paho.mqtt.client as mqtt
+import json
 
 # ---------------------------
 # Flask App Setup
@@ -21,12 +23,34 @@ latest_frame = None
 lock = threading.Lock()
 
 # ---------------------------
+# MQTT Client Setup
+# ---------------------------
+mqtt_client = mqtt.Client()
+mqtt_broker = "0.0.0.0"  # Change this to your MQTT broker address
+mqtt_port = 1883
+mqtt_topic = "pi4/detections"
+
+def setup_mqtt():
+    """
+    Setup MQTT client connection
+    """
+    try:
+        mqtt_client.connect(mqtt_broker, mqtt_port, 60)
+        mqtt_client.loop_start()
+        print(f"Connected to MQTT broker at {mqtt_broker}:{mqtt_port}")
+    except Exception as e:
+        print(f"Failed to connect to MQTT broker: {e}")
+
+# ---------------------------
 # DepthAI Pipeline + Inference
 # ---------------------------
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-m", "--model", help="Provide model name or model path for inference", type=str)
 parser.add_argument("-c", "--config", help="Provide config path for inference", type=str)
+parser.add_argument("--mqtt_broker", help="MQTT broker address", type=str, default="0.0.0.0")
+parser.add_argument("--mqtt_port", help="MQTT broker port", type=int, default=1883)
+parser.add_argument("--mqtt_topic", help="MQTT topic for publishing detections", type=str, default="pi4/detections")
 args = parser.parse_args()
 
 # Parse config
@@ -145,6 +169,8 @@ def frameNorm(frame, bbox):
 
 def draw_detections(frame, detections, depthFrame):
     color = (255, 0, 0)
+    detection_results = []
+    
     for detection in detections:
         # Draw bounding box.
         bbox = frameNorm(frame, (detection.xmin, detection.ymin, detection.xmax, detection.ymax))
@@ -175,7 +201,8 @@ def draw_detections(frame, detections, depthFrame):
             1
         )
 
-        # Calculate and display distance (if depth frame is available).
+        # Distance calculation
+        distance = None
         if depthFrame is not None:
             x1, y1, x2, y2 = bbox
             depth_slice = depthFrame[y1:y2, x1:x2]
@@ -194,12 +221,46 @@ def draw_detections(frame, detections, depthFrame):
                         (255, 255, 255),
                         1
                     )
+        
+        # Create a dictionary with detection details for MQTT
+        detection_data = {
+            "label": label_text,
+            "confidence": float(detection.confidence),
+            "bbox": {
+                "x1": int(bbox[0]),
+                "y1": int(bbox[1]),
+                "x2": int(bbox[2]),
+                "y2": int(bbox[3])
+            },
+            "timestamp": time.time()
+        }
+        
+        if distance is not None:
+            detection_data["distance"] = float(distance)
+            
+        detection_results.append(detection_data)
+    
+    # Publish detection results to MQTT
+    if detection_results and mqtt_client.is_connected():
+        payload = json.dumps({"detections": detection_results})
+        mqtt_client.publish(mqtt_topic, payload)
+        
+    return detection_results
 
 def run_pipeline():
     """
     Runs the DepthAI pipeline in a loop and updates the global 'latest_frame'.
     """
-    global latest_frame
+    global latest_frame, mqtt_broker, mqtt_port, mqtt_topic
+    
+    # Update MQTT configuration from command line args
+    mqtt_broker = args.mqtt_broker
+    mqtt_port = args.mqtt_port
+    mqtt_topic = args.mqtt_topic
+    
+    # Setup MQTT connection
+    setup_mqtt()
+    
     with dai.Device(pipeline) as device:
         qRgb = device.getOutputQueue(name="rgb", maxSize=4, blocking=False)
         qDet = device.getOutputQueue(name="nn", maxSize=4, blocking=False)
@@ -235,7 +296,7 @@ def run_pipeline():
                 depthFrame = inDepth.getFrame()
 
             if inRgb is not None:
-                # Draw detections onto the frame.
+                # Draw detections onto the frame and publish to MQTT
                 draw_detections(frame, detections, depthFrame)
 
                 # Update the global latest_frame with a lock for thread safety.
