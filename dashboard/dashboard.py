@@ -124,7 +124,7 @@ def vibrate():
     try:
         data = request.get_json()
         response = requests.post(
-            "http://192.168.2.219:5000/vibrate",
+            "http://localhost:5000/vibrate",
             headers={"Content-Type": "application/json"},
             json=data
         )
@@ -138,4 +138,4 @@ def get_all_data():
 
 if __name__ == '__main__':
     setup_mqtt()
-    socketio.run(app, host='0.0.0.0', port=8080, debug=True, allow_unsafe_werkzeug=True)
+    socketio.run(app, host='0.0.0.0', port=8080, debug=False, allow_unsafe_werkzeug=True)
