@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
-"""
-This script reads gyro data from an MPU-6050 sensor via I²C and publishes it every 0.25 seconds
-to an MQTT broker (assumed to be running on 0.0.0.0:1883) on the topic "pi4/gyro".
-"""
 
 import time
 import json
@@ -66,6 +62,36 @@ class mpu6050:
         else:
             return value
 
+    def get_accel_data(self, g=False):
+        x = self.read_i2c_word(self.ACCEL_XOUT0)
+        y = self.read_i2c_word(self.ACCEL_YOUT0)
+        z = self.read_i2c_word(self.ACCEL_ZOUT0)
+
+        accel_range = self.bus.read_byte_data(self.address, self.ACCEL_CONFIG)
+        if accel_range == self.ACCEL_RANGE_2G:
+            accel_scale_modifier = self.ACCEL_SCALE_MODIFIER_2G
+        elif accel_range == self.ACCEL_RANGE_4G:
+            accel_scale_modifier = self.ACCEL_SCALE_MODIFIER_4G
+        elif accel_range == self.ACCEL_RANGE_8G:
+            accel_scale_modifier = self.ACCEL_SCALE_MODIFIER_8G
+        elif accel_range == self.ACCEL_RANGE_16G:
+            accel_scale_modifier = self.ACCEL_SCALE_MODIFIER_16G
+        else:
+            print("Unknown accel range, defaulting to 2G")
+            accel_scale_modifier = self.ACCEL_SCALE_MODIFIER_2G
+
+        x = x / accel_scale_modifier
+        y = y / accel_scale_modifier
+        z = z / accel_scale_modifier
+
+        if g is True:
+            return {'x': x, 'y': y, 'z': z}
+        elif g is False:
+            x = x * self.GRAVITIY_MS2
+            y = y * self.GRAVITIY_MS2
+            z = z * self.GRAVITIY_MS2
+            return {'x': x, 'y': y, 'z': z}
+
     def get_gyro_data(self):
         x = self.read_i2c_word(self.GYRO_XOUT0)
         y = self.read_i2c_word(self.GYRO_YOUT0)
@@ -93,17 +119,18 @@ class mpu6050:
 MQTT_BROKER_HOST = "0.0.0.0"
 MQTT_BROKER_PORT = 1883
 MQTT_TOPIC = "pi4/gyro"
+PUBLISH_FREQUENCY = 0.25
 
-def on_connect(client, userdata, flags, rc):
+def on_connect(client, userdata, flags, rc, properties=None):
     if rc == 0:
         print("Connected to MQTT Broker")
     else:
-        print("Failed to connect, return code %d", rc)
+        print(f"Failed to connect, return code {rc}")
 
 def main():
     sensor = mpu6050(0x68)
 
-    client = mqtt.Client()
+    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
     client.on_connect = on_connect
 
     try:
@@ -117,10 +144,26 @@ def main():
     try:
         while True:
             gyro_data = sensor.get_gyro_data()
-            payload = json.dumps(gyro_data)
-            client.publish(MQTT_TOPIC, payload)
-            print("Published:", payload)
-            time.sleep(0.25)
+            accel_data = sensor.get_accel_data()
+            
+            payload = {
+                "gyro": {
+                    "x": gyro_data["x"],
+                    "y": gyro_data["y"],
+                    "z": gyro_data["z"]
+                },
+                "accel": {
+                    "x": accel_data["x"],
+                    "y": accel_data["y"],
+                    "z": accel_data["z"]
+                },
+                "timestamp": time.time()
+            }
+            
+            payload_json = json.dumps(payload)
+            client.publish(MQTT_TOPIC, payload_json)
+            print(f"Published: gyro(x={gyro_data['x']:.2f}, y={gyro_data['y']:.2f}, z={gyro_data['z']:.2f}), accel(x={accel_data['x']:.2f}, y={accel_data['y']:.2f}, z={accel_data['z']:.2f})")
+            time.sleep(PUBLISH_FREQUENCY)
     except KeyboardInterrupt:
         print("Exiting...")
     finally:
