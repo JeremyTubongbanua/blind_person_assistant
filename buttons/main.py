@@ -6,9 +6,10 @@ import paho.mqtt.client as mqtt
 MQTT_BROKER = "0.0.0.0"
 MQTT_PORT = 1883
 MQTT_TOPIC = "pi2/button_state"
+HEALTH_CHECK_INTERVAL = 5  # seconds
 
-BUTTON_PIN_1 = 26
-BUTTON_PIN_2 = 16
+BUTTON_PIN_1 = 26 # left button
+BUTTON_PIN_2 = 16 # right button
 
 def setup_gpio():
     """
@@ -61,6 +62,13 @@ def publish_button_states(client, button1_pressed, button2_pressed):
     client.publish(MQTT_TOPIC, message)
     return payload
 
+def print_health_check():
+    """
+    Print a health check message with current timestamp.
+    """
+    current_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+    print(f"HEALTH CHECK: {current_time} - Button monitor running")
+
 def main():
     """
     Main function to run the button state monitoring and MQTT publishing.
@@ -70,9 +78,17 @@ def main():
     
     prev_button1_state = False
     prev_button2_state = False
+    last_health_check = time.time()
     
     try:
         while True:
+            current_time = time.time()
+            
+            # Health check every HEALTH_CHECK_INTERVAL seconds
+            if current_time - last_health_check >= HEALTH_CHECK_INTERVAL:
+                print_health_check()
+                last_health_check = current_time
+            
             button1_pressed, button2_pressed = read_button_states()
             
             if button1_pressed != prev_button1_state or button2_pressed != prev_button2_state:
@@ -81,10 +97,6 @@ def main():
                 
                 prev_button1_state = button1_pressed
                 prev_button2_state = button2_pressed
-            
-            # print(f"Button 1: {'Pressed' if button1_pressed else 'Released'}")
-            # print(f"Button 2: {'Pressed' if button2_pressed else 'Released'}")
-            # print("-" * 30)
             
             time.sleep(0.1)
             

@@ -5,7 +5,8 @@ import time
 import threading
 import queue
 
-MQTT_BROKER = "192.168.2.220"  # IP address of the master Raspberry Pi
+MQTT_BROKER_RECEIVE = "192.168.2.220"  # IP address of the master Raspberry Pi
+MQTT_BROKER_RESPONSE = "0.0.0.0"       # Local broker for responses
 MQTT_PORT = 1883
 MQTT_TOPIC_RECEIVE = "pi4/vibration_motor_controller"
 MQTT_TOPIC_RESPONSE = "pi2/vibration_motor_response"
@@ -25,7 +26,8 @@ message_queue = queue.Queue()
 left_timer = None
 right_timer = None
 
-client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+client_receive = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+client_response = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 
 def turn_on_left_motor():
     GPIO.output(LEFT_MOTOR_PIN, GPIO.HIGH)
@@ -49,7 +51,7 @@ def send_status_update(message_id, status):
         "status": status
     }
     response_json = json.dumps(response)
-    client.publish(MQTT_TOPIC_RESPONSE, response_json)
+    client_response.publish(MQTT_TOPIC_RESPONSE, response_json)
     print(f"Published status: {response_json}")
 
 def on_connect(client, userdata, flags, rc, properties=None):
@@ -128,26 +130,43 @@ def cleanup():
     if right_timer is not None:
         right_timer.cancel()
 
-client.on_connect = on_connect
-client.on_message = on_message
+def setup_mqtt_clients():
+    client_receive.on_connect = on_connect
+    client_receive.on_message = on_message
+    
+    print(f"Connecting response client to MQTT broker at {MQTT_BROKER_RESPONSE}:{MQTT_PORT}")
+    try:
+        client_response.connect(MQTT_BROKER_RESPONSE, MQTT_PORT, 60)
+        client_response.loop_start()
+        print("Response client connected successfully")
+    except Exception as e:
+        print(f"Failed to connect response client: {e}")
+        return False
+    
+    print(f"Connecting receive client to MQTT broker at {MQTT_BROKER_RECEIVE}:{MQTT_PORT}")
+    try:
+        client_receive.connect(MQTT_BROKER_RECEIVE, MQTT_PORT, 60)
+        print("Receive client connected successfully")
+        return True
+    except Exception as e:
+        print(f"Failed to connect receive client: {e}")
+        client_response.loop_stop()
+        return False
 
 queue_thread = threading.Thread(target=process_queue, daemon=True)
 queue_thread.start()
 
 try:
-    print(f"Attempting to connect to MQTT broker at {MQTT_BROKER}:{MQTT_PORT}")
-    connection_result = client.connect(MQTT_BROKER, MQTT_PORT, 60)
-    print(f"Connection result: {connection_result}")
-    
-    client.loop_forever()
+    if setup_mqtt_clients():
+        print("Starting MQTT loop...")
+        client_receive.loop_forever()
+    else:
+        print("Failed to set up MQTT clients. Exiting.")
     
 except KeyboardInterrupt:
     print("Program terminated by user")
 except Exception as e:
-    print(f"Connection failed: {e}")
-    print("\nPlease check if:")
-    print("1. The MQTT broker (mosquitto) is installed and running on {MQTT_BROKER}")
-    print("2. The broker is configured to accept external connections")
-    print("3. Any firewall is allowing connections on port {MQTT_PORT}")
+    print(f"Unexpected error: {e}")
 finally:
+    client_response.loop_stop()
     cleanup()
