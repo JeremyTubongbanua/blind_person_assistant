@@ -17,8 +17,19 @@
             grid-template-columns: repeat(auto-fill, minmax(450px, 1fr));
             gap: 20px;
         }
-        .video-container {
+        .section {
             grid-column: span 2;
+            background-color: #f0f4f8;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-left: 5px solid #4285f4;
+        }
+        .section-title {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #333;
         }
         .data-card {
             background-color: white;
@@ -109,17 +120,41 @@
             font-size: 14px;
             font-style: italic;
         }
+        .flex-container {
+            display: flex;
+            gap: 20px;
+        }
+        .flex-column {
+            flex: 1;
+        }
+        .device-label {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            margin-right: 5px;
+            color: white;
+        }
+        .device-headset {
+            background-color: #4285f4;
+        }
+        .device-cane {
+            background-color: #34a853;
+        }
         @media (max-width: 768px) {
             .dashboard {
                 grid-template-columns: 1fr;
             }
-            .video-container {
+            .section {
                 grid-column: span 1;
             }
             .header-controls {
                 flex-direction: column;
                 align-items: flex-start;
                 gap: 10px;
+            }
+            .flex-container {
+                flex-direction: column;
             }
         }
     </style>
@@ -142,56 +177,118 @@
     </div>
     
     <div class="dashboard">
-        <div class="data-card video-container">
-            <div class="card-title">[Headset] Camera Feed</div>
-            <img class="video-stream" src="http://192.168.2.220:8005/video_stream" alt="Camera Stream" />
-        </div>
-
-        <div class="data-card">
-            <div class="card-title">[Cane] Vibrate Motors</div>
-            <div class="controls">
-                <div>
-                    <label for="leftDuration">Left Duration (seconds)</label>
-                    <input type="number" id="leftDuration" min="0" step="0.1" value="0.5">
+        <!-- Camera Section -->
+        <div class="section">
+            <div class="section-title">Camera</div>
+            <div class="flex-container">
+                <div class="flex-column">
+                    <div class="data-card">
+                        <div class="card-title">
+                            <span class="device-label device-headset">Headset</span>
+                            Camera Feed
+                        </div>
+                        <img class="video-stream" src="http://192.168.2.220:8005/video_stream" alt="Camera Stream" />
+                    </div>
                 </div>
-                <div>
-                    <label for="rightDuration">Right Duration (seconds)</label>
-                    <input type="number" id="rightDuration" min="0" step="0.1" value="0.5">
+                <div class="flex-column">
+                    <div class="data-card">
+                        <div class="card-title">
+                            <span class="device-label device-headset">Headset</span>
+                            Camera Detections
+                            <span id="detectionsStatus" class="status-indicator"></span>
+                        </div>
+                        <pre id="cameraDetections">Awaiting data...</pre>
+                    </div>
                 </div>
-                <button id="vibrateButton">Vibrate</button>
             </div>
-            <div id="vibrateStatus"></div>
         </div>
 
-        <div class="data-card">
-            <div class="card-title">[Cane] Cane Button State <span id="caneStatus" class="status-indicator"></span></div>
-            <pre id="caneButtonState">Awaiting data...</pre>
+        <!-- Gyro Section -->
+        <div class="section">
+            <div class="section-title">Gyroscope</div>
+            <div class="flex-container">
+                <div class="flex-column">
+                    <div class="data-card">
+                        <div class="card-title">
+                            <span class="device-label device-cane">Cane</span>
+                            Gyro
+                            <span id="gyroStatus" class="status-indicator"></span>
+                        </div>
+                        <pre id="gyro">Awaiting data...</pre>
+                    </div>
+                </div>
+                <div class="flex-column">
+                    <div class="data-card">
+                        <div class="card-title">
+                            <span class="device-label device-headset">Headset</span>
+                            Gyro
+                            <span id="headsetGyroStatus" class="status-indicator"></span>
+                        </div>
+                        <pre id="headsetGyro">Awaiting data...</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        
+        <!-- Vibration Motor Section -->
+        <div class="section">
+            <div class="section-title">Vibration Motors</div>
+            <div class="flex-container">
+                <div class="flex-column">
+                    <div class="data-card">
+                        <div class="card-title">
+                            <span class="device-label device-cane">Cane</span>
+                            Vibrate Controls
+                        </div>
+                        <div class="controls">
+                            <div>
+                                <label for="leftDuration">Left Duration (seconds)</label>
+                                <input type="number" id="leftDuration" min="0" step="0.1" value="0.5">
+                            </div>
+                            <div>
+                                <label for="rightDuration">Right Duration (seconds)</label>
+                                <input type="number" id="rightDuration" min="0" step="0.1" value="0.5">
+                            </div>
+                            <button id="vibrateButton">Vibrate</button>
+                        </div>
+                        <div id="vibrateStatus"></div>
+                    </div>
+                </div>
+                <div class="flex-column">
+                    <div class="data-card">
+                        <div class="card-title">
+                            <span class="device-label device-cane">Cane</span>
+                            Vibration Motor Response
+                            <span id="vibrationResponseStatus" class="status-indicator"></span>
+                        </div>
+                        <pre id="vibrationMotorResponse">Awaiting data...</pre>
+                    </div>
+                </div>
+            </div>
+            <div class="data-card">
+                <div class="card-title">
+                    <span class="device-label device-headset">Headset</span>
+                    Vibration Motor Controller
+                    <span id="headsetVibrationStatus" class="status-indicator"></span>
+                </div>
+                <pre id="headsetVibrationMotorController">Awaiting data...</pre>
+            </div>
         </div>
 
-        <div class="data-card">
-            <div class="card-title">[Cane] Gyro <span id="gyroStatus" class="status-indicator"></span></div>
-            <pre id="gyro">Awaiting data...</pre>
+        <!-- Button Section -->
+        <div class="section">
+            <div class="section-title">Buttons</div>
+            <div class="data-card">
+                <div class="card-title">
+                    <span class="device-label device-cane">Cane</span>
+                    Button State
+                    <span id="caneStatus" class="status-indicator"></span>
+                </div>
+                <pre id="caneButtonState">Awaiting data...</pre>
+            </div>
         </div>
 
-        <div class="data-card">
-            <div class="card-title">[Cane] Vibration Motor Response <span id="vibrationResponseStatus" class="status-indicator"></span></div>
-            <pre id="vibrationMotorResponse">Awaiting data...</pre>
-        </div>
-
-        <div class="data-card">
-            <div class="card-title">[Headset] Camera Detections <span id="detectionsStatus" class="status-indicator"></span></div>
-            <pre id="cameraDetections">Awaiting data...</pre>
-        </div>
-
-        <div class="data-card">
-            <div class="card-title">[Headset] Gyro <span id="headsetGyroStatus" class="status-indicator"></span></div>
-            <pre id="headsetGyro">Awaiting data...</pre>
-        </div>
-
-        <div class="data-card">
-            <div class="card-title">[Headset] Vibration Motor Controller <span id="headsetVibrationStatus" class="status-indicator"></span></div>
-            <pre id="headsetVibrationMotorController">Awaiting data...</pre>
-        </div>
     </div>
 
     <script>
