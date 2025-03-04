@@ -33,15 +33,27 @@ def read_sensor_data(sensor):
     Read acceleration and gyroscope data from the sensor.
     
     Returns:
-        dict: Combined accelerometer and gyroscope data
+        dict: Combined accelerometer and gyroscope data with the format matching requirements
     """
     accel_data = sensor.get_accel_data()
     gyro_data = sensor.get_gyro_data()
     
-    return {
-        "accel": accel_data,
-        "gyro": gyro_data
+    # Format according to the specified JSON structure
+    formatted_data = {
+        "gyro": {
+            "x": gyro_data["x"],
+            "y": gyro_data["y"],
+            "z": gyro_data["z"]
+        },
+        "accel": {
+            "x": accel_data["x"],
+            "y": accel_data["y"],
+            "z": accel_data["z"]
+        },
+        "timestamp": time.time()
     }
+    
+    return formatted_data
 
 def publish_sensor_data(client, sensor_data):
     """
@@ -51,19 +63,9 @@ def publish_sensor_data(client, sensor_data):
         client: MQTT client instance
         sensor_data: Dictionary containing sensor readings
     """
-    payload = {
-        "accel_x": sensor_data["accel"]["x"],
-        "accel_y": sensor_data["accel"]["y"],
-        "accel_z": sensor_data["accel"]["z"],
-        "gyro_x": sensor_data["gyro"]["x"],
-        "gyro_y": sensor_data["gyro"]["y"],
-        "gyro_z": sensor_data["gyro"]["z"],
-        "timestamp": time.time()
-    }
-    
-    message = json.dumps(payload)
+    message = json.dumps(sensor_data)
     client.publish(MQTT_TOPIC, message)
-    return payload
+    return sensor_data
 
 def main():
     """
@@ -78,9 +80,9 @@ def main():
         
         while True:
             sensor_data = read_sensor_data(sensor)
-            payload = publish_sensor_data(mqtt_client, sensor_data)
+            published_data = publish_sensor_data(mqtt_client, sensor_data)
             
-            print(f"Published: {payload}")
+            print(f"Published: {published_data}")
             
             time.sleep(PUBLISH_FREQUENCY)
             
