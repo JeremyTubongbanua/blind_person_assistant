@@ -8,7 +8,7 @@
 ```
 curl -X POST http://localhost:5000/vibrate \
   -H "Content-Type: application/json" \
-  -d '{"left_duration": 2, "right_duration": 0.5}'
+  -d '{"left_duration": 0.5, "right_duration": 0.5}'
 
 {
     "data": {

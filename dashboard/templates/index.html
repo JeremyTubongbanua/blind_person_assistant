@@ -85,6 +85,30 @@
         h1 {
             margin-bottom: 20px;
         }
+        .header-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .mqtt-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .mqtt-indicator {
+            display: flex;
+            align-items: center;
+            margin-left: 10px;
+        }
+        .mqtt-indicator span {
+            margin-left: 5px;
+        }
+        #refreshStatus {
+            margin-left: 10px;
+            font-size: 14px;
+            font-style: italic;
+        }
         @media (max-width: 768px) {
             .dashboard {
                 grid-template-columns: 1fr;
@@ -92,11 +116,30 @@
             .video-container {
                 grid-column: span 1;
             }
+            .header-controls {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
         }
     </style>
 </head>
 <body>
-    <h1>Headset Monitoring Dashboard</h1>
+    <div class="header-controls">
+        <h1>Headset Monitoring Dashboard</h1>
+        <div class="mqtt-status">
+            <button id="refreshMqttButton">Refresh MQTT Connections</button>
+            <span id="refreshStatus"></span>
+            <div class="mqtt-indicator">
+                <div id="rpi2ConnectionStatus" class="status-indicator"></div>
+                <span>RPI2</span>
+            </div>
+            <div class="mqtt-indicator">
+                <div id="rpi4ConnectionStatus" class="status-indicator"></div>
+                <span>RPI4</span>
+            </div>
+        </div>
+    </div>
     
     <div class="dashboard">
         <div class="data-card video-container">
@@ -163,6 +206,10 @@
             'Headset Gyro': { element: document.getElementById('headsetGyro'), status: document.getElementById('headsetGyroStatus') },
             'Headset Vibration Motor Controller': { element: document.getElementById('headsetVibrationMotorController'), status: document.getElementById('headsetVibrationStatus') }
         };
+
+        const rpi2ConnectionStatus = document.getElementById('rpi2ConnectionStatus');
+        const rpi4ConnectionStatus = document.getElementById('rpi4ConnectionStatus');
+        const refreshStatus = document.getElementById('refreshStatus');
         
         socket.on('connect', function() {
             console.log('Connected to server');
@@ -184,6 +231,35 @@
                 statusUpdates[topic] = setTimeout(() => {
                     topicElements[topic].status.className = 'status-indicator status-disconnected';
                 }, 10000);
+            }
+        });
+
+        socket.on('mqtt_connection_status', function(data) {
+            console.log('MQTT connection status update:', data);
+            
+            // Update RPI2 connection indicator
+            if (data.rpi2_connected !== undefined) {
+                rpi2ConnectionStatus.className = data.rpi2_connected ? 
+                    'status-indicator status-connected' : 
+                    'status-indicator status-disconnected';
+            }
+            
+            // Update RPI4 connection indicator
+            if (data.rpi4_connected !== undefined) {
+                rpi4ConnectionStatus.className = data.rpi4_connected ? 
+                    'status-indicator status-connected' : 
+                    'status-indicator status-disconnected';
+            }
+
+            // Update status message
+            if (data.status === 'connecting') {
+                refreshStatus.textContent = 'Connecting...';
+            } else if (data.status === 'connected') {
+                refreshStatus.textContent = 'Connected successfully';
+                setTimeout(() => { refreshStatus.textContent = ''; }, 5000);
+            } else if (data.status === 'failed') {
+                refreshStatus.textContent = 'Connection failed';
+                setTimeout(() => { refreshStatus.textContent = ''; }, 5000);
             }
         });
         
@@ -229,6 +305,32 @@
             })
             .catch(error => {
                 statusElement.textContent = `Error: ${error.message}`;
+            });
+        });
+
+        document.getElementById('refreshMqttButton').addEventListener('click', function() {
+            const button = this;
+            refreshStatus.textContent = "Reconnecting...";
+            button.disabled = true;
+            
+            fetch('/refresh_mqtt', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Refresh MQTT response:', data);
+                if (data.status === 'success') {
+                    refreshStatus.textContent = "MQTT connections refreshed successfully";
+                } else {
+                    refreshStatus.textContent = `Error: ${data.error}`;
+                }
+                setTimeout(() => {
+                    button.disabled = false;
+                }, 2000);
+            })
+            .catch(error => {
+                refreshStatus.textContent = `Error: ${error.message}`;
+                button.disabled = false;
             });
         });
 

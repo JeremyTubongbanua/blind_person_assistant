@@ -44,7 +44,7 @@ espeak-ng -s 250 "This text will be spoken at a faster speed"
 American english:
 
 ```bash
-espeak-ng -v en-us -s 130 "This is American English at a slower pace"
+espeak-ng -v en-us -s 130 "This is American English at a slower pace" --stdout 
 ```
 
 In a Python script:
@@ -56,3 +56,29 @@ speed = 150  # Set your desired speed
 text = "This is spoken at a custom speed"
 subprocess.run(["espeak-ng", "-s", str(speed), text])
 ```
+
+## main.py
+
+To test each endpoint,
+
+1. Play an audio file
+
+`curl "http://localhost:5001/play_file?file=jjk.wav"`
+`curl "http://localhost:5001/play_file?file=mixkit-retro-game-notification-212.wav"`
+
+2. Set volume to 75%
+
+`curl "http://localhost:5001/set_volume?volume=75"`
+
+3. Get current volume
+
+`curl "http://localhost:5001/get_volume"`
+
+4. Text-to-speech with default settings
+
+`curl "http://localhost:5001/tts?text=Hello%20Raspberry%20Pi"`
+
+5. Text-to-speech with custom settings
+
+`curl "http://localhost:5001/tts?text=This%20is%20a%20fast%20speaking%20voice&speed=250&voice_name=en-gb"`
+`curl "http://localhost:5001/tts?text=This%20is%20a%20normal%20speaking%20voice&speed=125&voice_name=en-us"`
