@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+
+# document usage of this script
+# python3 speaker.py --input /path/to/audio/file --volume 0.5
+
 import argparse
 import os
 import sys
