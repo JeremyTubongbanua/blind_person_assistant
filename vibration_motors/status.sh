@@ -1,2 +1,2 @@
 #!/bin/bash
-journalctl -u vibration-motors.service -f
+journalctl -f -u vibration-motors.service
