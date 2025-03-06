@@ -9,13 +9,13 @@ aplay -l
 Then change speaker via
 
 ```bash
-alsamixer -c 3
+alsamixer -c 1
 ```
 
 To set volume, use
 
 ```bash
-amixer -c 3 set PCM 50%
+amixer -c 1 set PCM 80%
 ```
 
 ## espeak-ng

@@ -8,7 +8,7 @@ import threading
 
 app = Flask(__name__)
 
-CARD_NUMBER = 3
+CARD_NUMBER = 1
 VOLUME_CONTROL = "PCM"
 AUDIO_FILES_DIR = "files"
 DEFAULT_VOICE = "en-us"
@@ -56,6 +56,7 @@ def play_audio_file(file_path, volume_scale=1.0):
             playback_active = True
         
         os.environ["SDL_AUDIODRIVER"] = "alsa"
+        os.environ["AUDIODEV"] = 'plughw:1,0'
         if not pygame.mixer.get_init():
             pygame.mixer.init()
         else:
@@ -201,5 +202,7 @@ if __name__ == '__main__':
     os.makedirs(AUDIO_FILES_DIR, exist_ok=True)
     
     pygame.mixer.init()
+    
+    play_audio_file('files/mixkit-retro-game-notification-212.wav')
     
     app.run(host='0.0.0.0', port=5001, debug=False)
