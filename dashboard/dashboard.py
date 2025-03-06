@@ -93,7 +93,6 @@ def stop_mqtt_clients():
     except Exception as e:
         print(f"Error disconnecting RPI4 client: {e}")
     
-    # Wait for threads to terminate (with timeout)
     for thread in mqtt_threads:
         if thread.is_alive():
             thread.join(timeout=2)
@@ -104,13 +103,10 @@ def stop_mqtt_clients():
 def setup_mqtt():
     global mqtt_threads
     
-    # First stop existing connections
     stop_mqtt_clients()
     
-    # Reset connection status for UI
     socketio.emit('mqtt_connection_status', {'status': 'connecting'})
     
-    # Set up RPI2 client
     rpi2_client.on_message = on_rpi2_message
     rpi2_connected = False
     try:
@@ -123,7 +119,6 @@ def setup_mqtt():
     except Exception as e:
         print(f"Error connecting to {RPI2_BROKER}: {e}")
     
-    # Set up RPI4 client
     rpi4_client.on_message = on_rpi4_message
     rpi4_connected = False
     try:
@@ -137,7 +132,6 @@ def setup_mqtt():
     except Exception as e:
         print(f"Error connecting to {RPI4_BROKER}: {e}")
     
-    # Start client loops in new threads
     if rpi2_connected:
         rpi2_thread = threading.Thread(target=rpi2_client_loop, daemon=True)
         rpi2_thread.start()
@@ -148,7 +142,6 @@ def setup_mqtt():
         rpi4_thread.start()
         mqtt_threads.append(rpi4_thread)
     
-    # Notify frontend of connection status
     connection_status = {
         'rpi2_connected': rpi2_connected,
         'rpi4_connected': rpi4_connected,
@@ -198,6 +191,56 @@ def refresh_mqtt():
     try:
         connection_status = setup_mqtt()
         return jsonify({"status": "success", "connection": connection_status}), 200
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+@app.route('/play_audio', methods=['POST'])
+def play_audio():
+    try:
+        data = request.get_json()
+        file_name = data.get('file')
+        
+        response = requests.get(
+            f"http://localhost:5001/play_file?file={file_name}"
+        )
+        return jsonify({"status": "success", "message": f"Playing {file_name}"}), 200
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+@app.route('/set_volume', methods=['POST'])
+def set_volume():
+    try:
+        data = request.get_json()
+        volume = data.get('volume')
+        
+        response = requests.get(
+            f"http://localhost:5001/set_volume?volume={volume}"
+        )
+        return jsonify({"status": "success", "message": f"Volume set to {volume}%"}), 200
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+@app.route('/get_volume', methods=['GET'])
+def get_volume():
+    try:
+        response = requests.get("http://localhost:5001/get_volume")
+        volume_data = response.json()
+        return jsonify(volume_data), 200
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+@app.route('/text_to_speech', methods=['POST'])
+def text_to_speech():
+    try:
+        data = request.get_json()
+        text = data.get('text')
+        speed = data.get('speed', 125)
+        voice_name = data.get('voice_name', 'en-us')
+        
+        response = requests.get(
+            f"http://localhost:5001/tts?text={text}&speed={speed}&voice_name={voice_name}"
+        )
+        return jsonify({"status": "success", "message": "Speech played successfully"}), 200
     except Exception as e:
         return jsonify({"status": "error", "error": str(e)}), 500
 

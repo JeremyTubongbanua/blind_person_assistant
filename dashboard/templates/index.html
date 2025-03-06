@@ -141,6 +141,58 @@
         .device-cane {
             background-color: #34a853;
         }
+        .audio-select {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            min-width: 250px;
+        }
+        .volume-slider-container {
+            display: flex;
+            flex-direction: column;
+            width: 200px;
+            margin-right: 10px;
+        }
+        .volume-slider {
+            width: 100%;
+            margin-top: 5px;
+        }
+        .tts-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .tts-input-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .tts-text-input {
+            flex-grow: 1;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .tts-params-row {
+            display: flex;
+            gap: 20px;
+        }
+        .tts-param {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .tts-select {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            width: 150px;
+        }
+        #audioPlayStatus, #volumeStatus, #ttsStatus {
+            margin-top: 10px;
+            font-style: italic;
+            color: #666;
+        }
         @media (max-width: 768px) {
             .dashboard {
                 grid-template-columns: 1fr;
@@ -155,6 +207,14 @@
             }
             .flex-container {
                 flex-direction: column;
+            }
+            .tts-params-row {
+                flex-direction: column;
+                gap: 10px;
+            }
+            .volume-slider-container {
+                width: 100%;
+                margin-bottom: 10px;
             }
         }
     </style>
@@ -289,6 +349,69 @@
             </div>
         </div>
 
+        <!-- Speaker Section -->
+        <div class="section">
+            <div class="section-title">Speaker</div>
+            
+            <!-- Audio File Player -->
+            <div class="data-card">
+                <div class="card-title">Play Audio File</div>
+                <div class="controls">
+                    <select id="audioFileSelect" class="audio-select">
+                        <option value="">Select audio file...</option>
+                        <option value="jjk.wav">JJK Sound</option>
+                        <option value="mixkit-retro-game-notification-212.wav">Retro Game Notification</option>
+                    </select>
+                    <button id="playAudioButton">Play</button>
+                    <div id="audioPlayStatus"></div>
+                </div>
+            </div>
+            
+            <!-- Volume Control -->
+            <div class="data-card">
+                <div class="card-title">Volume Control</div>
+                <div class="controls">
+                    <div class="volume-slider-container">
+                        <label for="volumeSlider">Volume: <span id="volumeValue">75</span>%</label>
+                        <input type="range" id="volumeSlider" min="0" max="100" value="75" class="volume-slider">
+                    </div>
+                    <button id="setVolumeButton">Set Volume</button>
+                    <button id="getVolumeButton">Get Current Volume</button>
+                    <div id="volumeStatus"></div>
+                </div>
+            </div>
+            
+            <!-- Text-to-Speech -->
+            <div class="data-card">
+                <div class="card-title">Text-to-Speech</div>
+                <div class="tts-controls">
+                    <div class="tts-input-row">
+                        <label for="ttsText">Text:</label>
+                        <input type="text" id="ttsText" placeholder="Enter text to speak" class="tts-text-input">
+                    </div>
+                    <div class="tts-params-row">
+                        <div class="tts-param">
+                            <label for="ttsSpeed">Speed:</label>
+                            <select id="ttsSpeed" class="tts-select">
+                                <option value="125">Normal (125)</option>
+                                <option value="100">Slow (100)</option>
+                                <option value="175">Fast (175)</option>
+                                <option value="250">Very Fast (250)</option>
+                            </select>
+                        </div>
+                        <div class="tts-param">
+                            <label for="ttsVoice">Voice:</label>
+                            <select id="ttsVoice" class="tts-select">
+                                <option value="en-us">English (US)</option>
+                                <option value="en-gb">English (UK)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button id="speakButton">Speak</button>
+                    <div id="ttsStatus"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -334,21 +457,18 @@
         socket.on('mqtt_connection_status', function(data) {
             console.log('MQTT connection status update:', data);
             
-            // Update RPI2 connection indicator
             if (data.rpi2_connected !== undefined) {
                 rpi2ConnectionStatus.className = data.rpi2_connected ? 
                     'status-indicator status-connected' : 
                     'status-indicator status-disconnected';
             }
             
-            // Update RPI4 connection indicator
             if (data.rpi4_connected !== undefined) {
                 rpi4ConnectionStatus.className = data.rpi4_connected ? 
                     'status-indicator status-connected' : 
                     'status-indicator status-disconnected';
             }
 
-            // Update status message
             if (data.status === 'connecting') {
                 refreshStatus.textContent = 'Connecting...';
             } else if (data.status === 'connected') {
@@ -444,6 +564,149 @@
             this.style.color = '#666';
             this.textContent = 'Video stream unavailable';
         };
+        
+        // Audio Player Controls
+        document.getElementById('playAudioButton').addEventListener('click', function() {
+            const audioFile = document.getElementById('audioFileSelect').value;
+            const statusElement = document.getElementById('audioPlayStatus');
+            
+            if (!audioFile) {
+                statusElement.textContent = "Please select an audio file";
+                return;
+            }
+            
+            statusElement.textContent = `Playing ${audioFile}...`;
+            
+            fetch('/play_audio', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    file: audioFile
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                statusElement.textContent = data.message;
+                setTimeout(() => {
+                    statusElement.textContent = "";
+                }, 5000);
+            })
+            .catch(error => {
+                statusElement.textContent = `Error: ${error.message}`;
+            });
+        });
+
+        // Volume Controls
+        const volumeSlider = document.getElementById('volumeSlider');
+        const volumeValue = document.getElementById('volumeValue');
+
+        volumeSlider.addEventListener('input', function() {
+            volumeValue.textContent = this.value;
+        });
+
+        document.getElementById('setVolumeButton').addEventListener('click', function() {
+            const volume = volumeSlider.value;
+            const statusElement = document.getElementById('volumeStatus');
+            
+            statusElement.textContent = `Setting volume to ${volume}%...`;
+            
+            fetch('/set_volume', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    volume: volume
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                statusElement.textContent = data.message;
+                setTimeout(() => {
+                    statusElement.textContent = "";
+                }, 5000);
+            })
+            .catch(error => {
+                statusElement.textContent = `Error: ${error.message}`;
+            });
+        });
+
+        document.getElementById('getVolumeButton').addEventListener('click', function() {
+            const statusElement = document.getElementById('volumeStatus');
+            
+            statusElement.textContent = "Getting current volume...";
+            
+            fetch('/get_volume')
+            .then(response => response.json())
+            .then(data => {
+                if (data.volume !== undefined) {
+                    volumeSlider.value = data.volume;
+                    volumeValue.textContent = data.volume;
+                    statusElement.textContent = `Current volume: ${data.volume}%`;
+                } else {
+                    statusElement.textContent = "Error retrieving volume";
+                }
+                
+                setTimeout(() => {
+                    statusElement.textContent = "";
+                }, 5000);
+            })
+            .catch(error => {
+                statusElement.textContent = `Error: ${error.message}`;
+            });
+        });
+
+        // Text-to-Speech Controls
+        document.getElementById('speakButton').addEventListener('click', function() {
+            const text = document.getElementById('ttsText').value;
+            const speed = document.getElementById('ttsSpeed').value;
+            const voice = document.getElementById('ttsVoice').value;
+            const statusElement = document.getElementById('ttsStatus');
+            
+            if (!text) {
+                statusElement.textContent = "Please enter text to speak";
+                return;
+            }
+            
+            statusElement.textContent = "Speaking...";
+            
+            fetch('/text_to_speech', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    text: text,
+                    speed: speed,
+                    voice_name: voice
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                statusElement.textContent = data.message || "Speech completed";
+                setTimeout(() => {
+                    statusElement.textContent = "";
+                }, 5000);
+            })
+            .catch(error => {
+                statusElement.textContent = `Error: ${error.message}`;
+            });
+        });
+
+        // Initialize by getting the current volume
+        fetch('/get_volume')
+            .then(response => response.json())
+            .then(data => {
+                if (data.volume !== undefined) {
+                    volumeSlider.value = data.volume;
+                    volumeValue.textContent = data.volume;
+                }
+            })
+            .catch(error => {
+                console.error("Error initializing volume:", error);
+            });
     </script>
 </body>
 </html>
