@@ -2,6 +2,7 @@ import RPi.GPIO as GPIO
 import paho.mqtt.client as mqtt
 import json
 import time
+from time import sleep
 import threading
 
 MQTT_BROKER_RECEIVE = "192.168.2.220"
@@ -170,7 +171,19 @@ def setup_mqtt_clients():
 try:
     if setup_mqtt_clients():
         print("Starting MQTT loop...")
+        turn_on_left_motor()
+        turn_on_right_motor()
+        sleep(0.1)
+        turn_off_left_motor()
+        turn_off_right_motor()
+        sleep(0.3)
+        turn_on_left_motor()
+        turn_on_right_motor()
+        sleep(0.1)
+        turn_off_left_motor()
+        turn_off_right_motor()
         client_receive.loop_forever()
+        # vibrate for 0.5 seconds for both
     else:
         print("Failed to set up MQTT clients. Exiting.")
     
