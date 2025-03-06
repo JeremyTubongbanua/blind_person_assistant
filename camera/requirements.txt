@@ -3,3 +3,4 @@ depthai
 flask
 opencv-python
 paho-mqtt
+ultralytics
