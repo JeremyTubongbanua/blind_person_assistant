@@ -14,7 +14,7 @@ MQTT_TOPIC_RESPONSE = "pi2/vibration_motor_response"
 LEFT_MOTOR_PIN = 22
 RIGHT_MOTOR_PIN = 17
 
-MESSAGE_TIMEOUT_SECONDS = 1.5
+MESSAGE_TIMEOUT_SECONDS = 2000
 
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(LEFT_MOTOR_PIN, GPIO.OUT)
@@ -64,6 +64,18 @@ def send_processing_status(message_id, left_motor_time=None, right_motor_time=No
     client_response.publish(MQTT_TOPIC_RESPONSE, response_json)
     print(f"Published processing status: {response_json}")
 
+def send_timeout_message(message_id, time_diff):
+    response = {
+        "id": message_id,
+        "status": "timeout",
+        "time_diff": time_diff,
+        "threshold": MESSAGE_TIMEOUT_SECONDS
+    }
+    
+    response_json = json.dumps(response)
+    client_response.publish(MQTT_TOPIC_RESPONSE, response_json)
+    print(f"Published timeout status: {response_json}")
+
 def on_connect(client, userdata, flags, rc, properties=None):
     print(f"Connected with result code {rc}")
     client.subscribe(MQTT_TOPIC_RECEIVE)
@@ -84,6 +96,8 @@ def on_message(client, userdata, msg):
         if message_timestamp and current_time - message_timestamp > MESSAGE_TIMEOUT_SECONDS:
             time_diff = current_time - message_timestamp
             print(f"Message too late: {time_diff} seconds (threshold: {MESSAGE_TIMEOUT_SECONDS} seconds)")
+            # Send timeout message to MQTT response topic
+            send_timeout_message(message_id, time_diff)
             return
         
         # Set this as the current command
