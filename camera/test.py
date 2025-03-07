@@ -65,7 +65,6 @@ def generate_frames():
     while True:
         with frame_lock:
             if latest_frame is not None:
-                # Create a copy of the current frame with detections
                 frame_with_detections = latest_frame.copy()
                 for detection in latest_detections:
                     if detection.label == person_class_id:  # Only show person detections
@@ -76,21 +75,17 @@ def generate_frames():
                         cv2.putText(frame_with_detections, f"Person: {detection.confidence:.2f}", 
                                 (bbox[0], bbox[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
                 
-                # Add timestamp and detection count
                 person_count = sum(1 for d in latest_detections if d.label == person_class_id)
                 cv2.putText(frame_with_detections, 
                             f"Time: {time.strftime('%Y-%m-%d %H:%M:%S')} | People: {person_count}", 
                             (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
                 
-                # Convert to JPEG for streaming
                 ret, buffer = cv2.imencode('.jpg', frame_with_detections)
                 frame_bytes = buffer.tobytes()
                 
-                # Yield the frame in the format required by Flask
                 yield (b'--frame\r\n'
                       b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
         
-        # Short delay to control frame rate
         time.sleep(0.03)  # ~30 FPS
 
 @app.route('/video_feed')
@@ -98,11 +93,9 @@ def video_feed():
     return Response(generate_frames(),
                    mimetype='multipart/x-mixed-replace; boundary=frame')
 
-# Initialize DepthAI pipeline
 def setup_oak_pipeline():
     pipeline = dai.Pipeline()
 
-    # Define sources and outputs
     camRgb = pipeline.create(dai.node.ColorCamera)
     detectionNetwork = pipeline.create(dai.node.YoloDetectionNetwork)
     xoutRgb = pipeline.create(dai.node.XLinkOut)
@@ -111,13 +104,11 @@ def setup_oak_pipeline():
     xoutRgb.setStreamName("rgb")
     nnOut.setStreamName("nn")
 
-    # Properties
     camRgb.setPreviewSize(416, 416)
     camRgb.setResolution(dai.ColorCameraProperties.SensorResolution.THE_1080_P)
     camRgb.setInterleaved(False)
     camRgb.setColorOrder(dai.ColorCameraProperties.ColorOrder.BGR)
 
-    # Network specific settings for YOLOv8n
     detectionNetwork.setConfidenceThreshold(args.threshold)
     detectionNetwork.setNumClasses(80)  # COCO dataset has 80 classes
     detectionNetwork.setCoordinateSize(4)

@@ -80,5 +80,5 @@ To test each endpoint,
 
 5. Text-to-speech with custom settings
 
-`curl "http://localhost:5001/tts?text=This%20is%20a%20fast%20speaking%20voice&speed=250&voice_name=en-gb"`
-`curl "http://localhost:5001/tts?text=This%20is%20a%20normal%20speaking%20voice&speed=125&voice_name=en-us"`
+`curl "http://localhost:5001/tts?text=This%20is%20a%20fast%20speaking%20voice&speed=250&voice_name=en-us"`
+`curl "http://localhost:5001/tts?text=This%20is%20a%20normal%20speaking%20voice&speed=175&voice_name=en-us"`
