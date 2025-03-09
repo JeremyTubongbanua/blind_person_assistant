@@ -118,13 +118,12 @@ class mpu6050:
         # y = z
         # z = -temp_y
         
-
         return {'x': x, 'y': y, 'z': z}
 
 MQTT_BROKER_HOST = "0.0.0.0"
 MQTT_BROKER_PORT = 1883
 MQTT_TOPIC = "pi4/gyro"
-PUBLISH_FREQUENCY = 0.10
+PUBLISH_FREQUENCY = 0.05
 
 def on_connect(client, userdata, flags, rc, properties=None):
     if rc == 0:

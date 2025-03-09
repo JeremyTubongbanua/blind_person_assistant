@@ -20,7 +20,7 @@ gyro_integrated = {"roll": 0, "pitch": 0, "yaw": 0}
 gyro_calibration = {"x": 0, "y": 0, "z": 0}
 calibration_samples = 0
 is_calibrating = True
-CALIBRATION_SAMPLES_NEEDED = 10
+CALIBRATION_SAMPLES_NEEDED = 100
 
 YAW_DRIFT_COMPENSATION = 0.98
 
@@ -133,9 +133,12 @@ def reset_calibration():
     last_timestamp = 0
     gyro_integrated = {"roll": 0, "pitch": 0, "yaw": 0}
     
+    while is_calibrating:
+        time.sleep(0.1)
+    
     return jsonify({
         "status": "success",
-        "message": "Calibration reset. The system will recalibrate with the next 10 samples."
+        "message": "Calibration complete."
     })
 
 def run_flask():
