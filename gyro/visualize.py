@@ -49,7 +49,6 @@ def on_message(client, userdata, msg):
         
         current_timestamp = data.get("timestamp", 0)
         
-        # Calibration phase
         if is_calibrating and calibration_samples < CALIBRATION_SAMPLES_NEEDED:
             gyro_calibration["x"] += gyro_x
             gyro_calibration["y"] += gyro_y
@@ -64,29 +63,24 @@ def on_message(client, userdata, msg):
                 print(f"Calibration complete: {gyro_calibration}")
             return
         
-        # Apply calibration offsets
         gyro_x -= gyro_calibration["x"]
         gyro_y -= gyro_calibration["y"]
         gyro_z -= gyro_calibration["z"]
         
-        # Apply noise threshold to reduce drift
         noise_threshold = 0.03
         if abs(gyro_x) < noise_threshold: gyro_x = 0
         if abs(gyro_y) < noise_threshold: gyro_y = 0
         if abs(gyro_z) < noise_threshold: gyro_z = 0
         
         if first_message:
-            # Reset everything on first message
             gyro_integrated = {"roll": 0, "pitch": 0, "yaw": 0}
             first_message = False
             last_timestamp = current_timestamp
             
-            # Use accelerometer to get initial roll and pitch (more stable)
             accel_x = data.get("accel", {}).get("x", 0)
             accel_y = data.get("accel", {}).get("y", 0)
             accel_z = data.get("accel", {}).get("z", 0)
             
-            # Initial attitude from accelerometer
             roll = math.degrees(math.atan2(accel_y, accel_z))
             pitch = math.degrees(math.atan2(-accel_x, math.sqrt(accel_y**2 + accel_z**2)))
             yaw = 0  # Can't determine yaw from accelerometer alone
@@ -96,28 +90,21 @@ def on_message(client, userdata, msg):
         elif last_timestamp > 0:
             dt = current_timestamp - last_timestamp
             
-            # Apply complementary filter for roll and pitch
-            # (combines accelerometer and gyroscope data)
             accel_x = data.get("accel", {}).get("x", 0)
             accel_y = data.get("accel", {}).get("y", 0)
             accel_z = data.get("accel", {}).get("z", 0)
             
-            # Calculate accelerometer angles
             accel_roll = math.degrees(math.atan2(accel_y, accel_z))
             accel_pitch = math.degrees(math.atan2(-accel_x, math.sqrt(accel_y**2 + accel_z**2)))
             
-            # Update integrated angles with gyro data
             gyro_integrated["roll"] += gyro_x * dt
             gyro_integrated["pitch"] += gyro_y * dt
             gyro_integrated["yaw"] += gyro_z * dt * YAW_DRIFT_COMPENSATION
             
-            # Complementary filter - combine accelerometer and gyroscope
             alpha = 0.96  # Adjust this value (0.9-0.98) to balance gyro and accel
             gyro_integrated["roll"] = alpha * gyro_integrated["roll"] + (1 - alpha) * accel_roll
             gyro_integrated["pitch"] = alpha * gyro_integrated["pitch"] + (1 - alpha) * accel_pitch
-            # Yaw has no accelerometer component, rely only on gyro with drift compensation
             
-            # Apply yaw wrapping to keep within bounds
             if gyro_integrated["yaw"] > 180:
                 gyro_integrated["yaw"] -= 360
             elif gyro_integrated["yaw"] < -180:
@@ -125,7 +112,6 @@ def on_message(client, userdata, msg):
         
         last_timestamp = current_timestamp
         
-        # Bound check all values
         roll = max(min(gyro_integrated["roll"], 180), -180)+90
         pitch = max(min(gyro_integrated["pitch"], 180), -180)
         yaw = -max(min(gyro_integrated["yaw"], 180), -180)
