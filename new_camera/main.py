@@ -3,6 +3,7 @@ import depthai as dai
 import numpy as np
 import time
 import json
+import base64
 from flask import Flask, Response, jsonify, request
 import threading
 
@@ -234,6 +235,53 @@ def generate_frames():
         
         time.sleep(0.033)
 
+def visualize_depth(depth_frame):
+    depth_colormap = cv2.normalize(depth_frame, None, 0, 255, cv2.NORM_MINMAX)
+    depth_colormap = cv2.applyColorMap(depth_colormap.astype(np.uint8), cv2.COLORMAP_JET)
+    return depth_colormap
+
+def draw_detections(frame, detections):
+    result_frame = frame.copy()
+    
+    colors = [(0, 255, 0), (255, 0, 0), (0, 0, 255), (255, 255, 0), 
+              (0, 255, 255), (255, 0, 255), (128, 128, 0), (0, 128, 128)]
+    
+    for i, detection in enumerate(detections):
+        label = detection["label"]
+        confidence = detection["confidence"]
+        bbox = detection["bbox"]
+        
+        x1, y1, x2, y2 = bbox["x1"], bbox["y1"], bbox["x2"], bbox["y2"]
+        
+        color_idx = hash(label) % len(colors)
+        color = colors[color_idx]
+        
+        cv2.rectangle(result_frame, (x1, y1), (x2, y2), color, 2)
+        
+        label_text = f"{label}: {confidence:.2f}"
+        
+        text_size = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 1)[0]
+        
+        rect_y1 = max(0, y1 - text_size[1] - 10)
+        
+        cv2.rectangle(result_frame, (x1, rect_y1), (x1 + text_size[0], y1), color, -1)
+        cv2.putText(result_frame, label_text, (x1, y1 - 5),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+        
+        if "distance" in detection:
+            distance_text = f"{detection['distance']:.2f}m"
+            cv2.putText(result_frame, distance_text, (x1, y2 + 20),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+    
+    return result_frame
+
+def frame_to_base64(frame):
+    success, buffer = cv2.imencode('.jpg', frame)
+    if not success:
+        return None
+    encoded_image = base64.b64encode(buffer).decode('utf-8')
+    return encoded_image
+
 with frame_lock:
     latest_frame = create_placeholder_frame()
 
@@ -342,6 +390,21 @@ def get_detections():
                 
                 detections.append(detection_data)
         
+        detection_image = None
+        depth_image = None
+        
+        if frame_copy is not None:
+            detection_image = draw_detections(frame_copy, detections)
+            detection_image_b64 = frame_to_base64(detection_image)
+        else:
+            detection_image_b64 = None
+            
+        if depth_copy is not None:
+            depth_image = visualize_depth(depth_copy)
+            depth_image_b64 = frame_to_base64(depth_image)
+        else:
+            depth_image_b64 = None
+        
         class_counts = {}
         for detection in detections:
             label = detection["label"]
@@ -355,7 +418,9 @@ def get_detections():
             "timestamp": time.time(),
             "detected_classes": class_counts,
             "detections": detections,
-            "status": "ok"
+            "status": "ok",
+            "detection_image": detection_image_b64,
+            "depth_image": depth_image_b64
         })
     except Exception as e:
         running_inference = False
@@ -363,6 +428,154 @@ def get_detections():
             "error": f"Error processing detections: {str(e)}",
             "status": "error"
         })
+
+@app.route('/')
+def visualization():
+    return '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Detection Visualization</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                margin: 20px;
+                background-color: #f0f0f0;
+            }
+            .container {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 20px;
+            }
+            .image-container {
+                background-color: white;
+                padding: 10px;
+                border-radius: 5px;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            }
+            h2 {
+                margin-top: 0;
+            }
+            button {
+                background-color: #4CAF50;
+                border: none;
+                color: white;
+                padding: 10px 20px;
+                text-align: center;
+                text-decoration: none;
+                display: inline-block;
+                font-size: 16px;
+                margin: 20px 0;
+                cursor: pointer;
+                border-radius: 4px;
+            }
+            button:hover {
+                background-color: #45a049;
+            }
+            img {
+                max-width: 100%;
+                height: auto;
+                border: 1px solid #ddd;
+            }
+            #status {
+                margin: 10px 0;
+                font-weight: bold;
+            }
+            .detection-info {
+                margin-top: 10px;
+                padding: 10px;
+                background-color: #f9f9f9;
+                border-radius: 4px;
+                max-height: 200px;
+                overflow-y: auto;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Object Detection Visualization</h1>
+        <button id="detect-btn">Run Detection</button>
+        <div id="status">Ready</div>
+        <div class="container">
+            <div class="image-container">
+                <h2>Live Video Stream</h2>
+                <img id="live-stream" src="/video_stream" alt="Live video stream">
+            </div>
+            <div class="image-container">
+                <h2>Detection Image</h2>
+                <img id="detection-image" src="" alt="No detection image available">
+            </div>
+            <div class="image-container">
+                <h2>Depth Map</h2>
+                <img id="depth-image" src="" alt="No depth map available">
+            </div>
+        </div>
+        <div class="image-container">
+            <h2>Detection Results</h2>
+            <div id="detection-info" class="detection-info">No detections yet</div>
+        </div>
+
+        <script>
+            document.getElementById('detect-btn').addEventListener('click', async function() {
+                const statusEl = document.getElementById('status');
+                const detectionImageEl = document.getElementById('detection-image');
+                const depthImageEl = document.getElementById('depth-image');
+                const detectionInfoEl = document.getElementById('detection-info');
+                
+                statusEl.textContent = 'Running detection...';
+                
+                try {
+                    const response = await fetch('/detections');
+                    const data = await response.json();
+                    
+                    if (data.status === 'ok') {
+                        statusEl.textContent = 'Detection completed successfully';
+                        
+                        if (data.detection_image) {
+                            detectionImageEl.src = 'data:image/jpeg;base64,' + data.detection_image;
+                        } else {
+                            detectionImageEl.alt = 'No detection image available';
+                            detectionImageEl.src = '';
+                        }
+                        
+                        if (data.depth_image) {
+                            depthImageEl.src = 'data:image/jpeg;base64,' + data.depth_image;
+                        } else {
+                            depthImageEl.alt = 'No depth map available';
+                            depthImageEl.src = '';
+                        }
+                        
+                        if (data.detections && data.detections.length > 0) {
+                            let infoHTML = '<h3>Found ' + data.detections.length + ' objects:</h3>';
+                            infoHTML += '<ul>';
+                            
+                            data.detections.forEach((det, index) => {
+                                infoHTML += '<li>' + det.label + ' (confidence: ' + det.confidence.toFixed(2) + ')';
+                                
+                                if (det.distance !== undefined) {
+                                    infoHTML += ' - Distance: ' + det.distance.toFixed(2) + 'm';
+                                }
+                                
+                                infoHTML += '</li>';
+                            });
+                            
+                            infoHTML += '</ul>';
+                            detectionInfoEl.innerHTML = infoHTML;
+                        } else {
+                            detectionInfoEl.textContent = 'No objects detected';
+                        }
+                    } else {
+                        statusEl.textContent = 'Error: ' + (data.error || 'Unknown error');
+                        detectionInfoEl.textContent = 'Detection failed: ' + (data.error || 'Unknown error');
+                    }
+                } catch (error) {
+                    statusEl.textContent = 'Request failed: ' + error.message;
+                    detectionInfoEl.textContent = 'Request failed: ' + error.message;
+                }
+            });
+        </script>
+    </body>
+    </html>
+    '''
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=8005, debug=False, threaded=True)
