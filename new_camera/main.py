@@ -17,7 +17,6 @@ app = Flask(__name__)
 def create_pipeline():
     pipeline = dai.Pipeline()
     
-    # Define sources and outputs
     camRgb = pipeline.create(dai.node.ColorCamera)
     monoLeft = pipeline.create(dai.node.MonoCamera)
     monoRight = pipeline.create(dai.node.MonoCamera)
@@ -34,26 +33,22 @@ def create_pipeline():
     nnOut.setStreamName("nn")
     xoutDepth.setStreamName("depth")
     
-    # Properties
     camRgb.setPreviewSize(640, 640)
     camRgb.setResolution(dai.ColorCameraProperties.SensorResolution.THE_1080_P)
     camRgb.setInterleaved(False)
     camRgb.setColorOrder(dai.ColorCameraProperties.ColorOrder.BGR)
     camRgb.setFps(30)
     
-    # Mono camera properties (for depth)
     monoLeft.setResolution(dai.MonoCameraProperties.SensorResolution.THE_400_P)
     monoLeft.setBoardSocket(dai.CameraBoardSocket.LEFT)
     monoRight.setResolution(dai.MonoCameraProperties.SensorResolution.THE_400_P)
     monoRight.setBoardSocket(dai.CameraBoardSocket.RIGHT)
     
-    # StereoDepth configuration
     stereo.setDefaultProfilePreset(dai.node.StereoDepth.PresetMode.HIGH_DENSITY)
     stereo.setLeftRightCheck(True)
     stereo.setExtendedDisparity(False)
     stereo.setSubpixel(True)
     
-    # Object detection network configuration
     detectionNetwork.setBlobPath("yolov8ntrained_openvino_2022.1_6shave.blob")
     detectionNetwork.setConfidenceThreshold(confidence_threshold)
     detectionNetwork.setNumClasses(model_config['nn_config']['NN_specific_metadata']['classes'])
@@ -64,7 +59,6 @@ def create_pipeline():
     detectionNetwork.setNumInferenceThreads(2)
     detectionNetwork.input.setBlocking(False)
     
-    # Linking
     monoLeft.out.link(stereo.left)
     monoRight.out.link(stereo.right)
     
@@ -107,38 +101,30 @@ def create_placeholder_frame(message="Connecting to camera..."):
     return frame
 
 def calculate_distance(depth_map, bbox):
-    """Calculate the distance to an object using the depth map and bounding box."""
     x1, y1, x2, y2 = bbox
     
-    # Ensure the coordinates are within the bounds of the depth map
     x1 = max(0, min(x1, depth_map.shape[1] - 1))
     y1 = max(0, min(y1, depth_map.shape[0] - 1))
     x2 = max(0, min(x2, depth_map.shape[1] - 1))
     y2 = max(0, min(y2, depth_map.shape[0] - 1))
     
-    # Get the center of the bounding box
     center_x, center_y = (x1 + x2) // 2, (y1 + y2) // 2
     
-    # Define a sample size around the center point
     sample_size = 20
     x_start = max(center_x - sample_size//2, 0)
     y_start = max(center_y - sample_size//2, 0)
     x_end = min(center_x + sample_size//2, depth_map.shape[1])
     y_end = min(center_y + sample_size//2, depth_map.shape[0])
     
-    # Extract the depth values in the central region of the bounding box
     if x_end > x_start and y_end > y_start:
         depth_slice = depth_map[y_start:y_end, x_start:x_end]
         
         if depth_slice.size > 0:
-            # Filter out zero values (which are invalid depth measurements)
             valid_depths = depth_slice[depth_slice > 0]
             
             if len(valid_depths) > 0:
-                # Calculate the median depth value (more robust than mean)
                 median_depth = np.median(valid_depths)
                 
-                # Convert to meters (depth map values are in millimeters)
                 distance_meters = median_depth / 1000.0
                 
                 return distance_meters
@@ -174,14 +160,11 @@ def run_pipeline():
                     inRgb = qRgb.get()
                     frame = inRgb.getCvFrame()
                     
-                    # Flip the camera vertically
                     frame = cv2.flip(frame, 0)
                     
-                    # Get depth frame
                     inDepth = qDepth.tryGet()
                     if inDepth is not None:
                         depth_frame = inDepth.getFrame()
-                        # Keep aspect ratio and match RGB frame dimensions
                         depth_frame = cv2.resize(depth_frame, (frame.shape[1], frame.shape[0]))
                         
                         with depth_lock:
@@ -301,23 +284,19 @@ def get_detections():
             if latest_depth is not None:
                 depth_copy = latest_depth.copy()
         
-        # Set up dedicated inference queues
         nn_in = device.getInputQueue("frame_in")
         nn_out = device.getOutputQueue("nn", maxSize=4, blocking=True)
         
-        # Create dai frame
         img = dai.ImgFrame()
         img.setType(dai.ImgFrame.Type.BGR888p)
         img.setWidth(640)
         img.setHeight(640)
         img.setData(cv2.resize(frame_copy, (640, 640)).transpose(2, 0, 1).flatten())
         
-        # Start inference
         nn_in.send(img)
         
-        # Wait for result with timeout
         start_time = time.time()
-        timeout = 2.0  # 2 second timeout
+        timeout = 2.0
         
         in_nn = None
         while time.time() - start_time < timeout:
@@ -330,7 +309,6 @@ def get_detections():
             running_inference = False
             return jsonify({"error": "Detection timeout, no results received from neural network"})
         
-        # Process detections
         detections = []
         for detection in in_nn.detections:
             label_id = detection.label
@@ -342,10 +320,8 @@ def get_detections():
             confidence = detection.confidence
             
             if confidence >= confidence_threshold:
-                # Convert normalized coordinates to pixel coordinates
                 bbox = frameNorm(frame_copy, (detection.xmin, detection.ymin, detection.xmax, detection.ymax))
                 
-                # Calculate distance if depth map is available
                 distance = None
                 if depth_copy is not None:
                     distance = calculate_distance(depth_copy, (bbox[0], bbox[1], bbox[2], bbox[3]))
@@ -361,7 +337,6 @@ def get_detections():
                     }
                 }
                 
-                # Add distance information if available
                 if distance is not None:
                     detection_data["distance"] = round(float(distance), 2)
                 
@@ -388,157 +363,6 @@ def get_detections():
             "error": f"Error processing detections: {str(e)}",
             "status": "error"
         })
-
-@app.route('/')
-def index():
-    html = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Oak-D Lite Camera Stream</title>
-        <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            .video-container { position: relative; display: inline-block; }
-            .stream { max-width: 100%; border: 1px solid #ddd; }
-            #detectionCanvas { position: absolute; top: 0; left: 0; }
-            .controls { margin: 15px 0; }
-            button { padding: 5px 10px; margin-right: 10px; }
-            .results-container { display: flex; }
-            .canvas-container { margin-right: 20px; }
-            pre { background: #f5f5f5; padding: 10px; max-height: 300px; overflow: auto; flex: 1; }
-            .status { padding: 10px; margin-bottom: 10px; border-radius: 4px; display: none; }
-            .status.error { background-color: #ffebee; color: #c62828; display: block; }
-            .status.warning { background-color: #fff8e1; color: #ff8f00; display: block; }
-            .status.success { background-color: #e8f5e9; color: #2e7d32; display: block; }
-        </style>
-    </head>
-    <body>
-        <h1>Oak-D Lite Camera Stream with Depth Detection</h1>
-        <div id="statusMessage" class="status"></div>
-        <div class="video-container">
-            <img id="videoStream" class="stream" src="/video_stream" alt="Video Stream" onload="updateCanvasSize()">
-            <canvas id="detectionCanvas"></canvas>
-        </div>
-        <div class="controls">
-            <button id="detectBtn">Run Detection</button>
-            <button id="clearBtn">Clear Detections</button>
-        </div>
-        <div class="results-container">
-            <pre id="detectionResults"></pre>
-        </div>
-        
-        <script>
-            const canvas = document.getElementById('detectionCanvas');
-            const ctx = canvas.getContext('2d');
-            const videoStream = document.getElementById('videoStream');
-            const statusMessage = document.getElementById('statusMessage');
-            let detectBtnEnabled = true;
-            
-            function updateCanvasSize() {
-                canvas.width = videoStream.clientWidth;
-                canvas.height = videoStream.clientHeight;
-            }
-            
-            window.addEventListener('resize', updateCanvasSize);
-            
-            function drawBoundingBox(bbox, label, confidence, distance) {
-                const x = bbox.x1;
-                const y = bbox.y1;
-                const width = bbox.x2 - bbox.x1;
-                const height = bbox.y2 - bbox.y1;
-                
-                const scaleX = canvas.width / videoStream.naturalWidth;
-                const scaleY = canvas.height / videoStream.naturalHeight;
-                
-                const scaledX = x * scaleX;
-                const scaledY = y * scaleY;
-                const scaledWidth = width * scaleX;
-                const scaledHeight = height * scaleY;
-                
-                // Draw the rectangle
-                ctx.strokeStyle = '#00FF00';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(scaledX, scaledY, scaledWidth, scaledHeight);
-                
-                // Prepare the label text with distance if available
-                let labelText = `${label} (${(confidence * 100).toFixed(0)}%)`;
-                if (distance !== undefined) {
-                    labelText += ` - ${distance}m`;
-                }
-                
-                // Draw background for text at the top of the bounding box
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-                ctx.fillRect(scaledX, scaledY - 20, scaledWidth, 20);
-                
-                // Draw text
-                ctx.fillStyle = '#FFFFFF';
-                ctx.font = '12px Arial';
-                ctx.fillText(labelText, scaledX + 5, scaledY - 5);
-            }
-            
-            document.getElementById('detectBtn').addEventListener('click', function() {
-                if (!detectBtnEnabled) return;
-                
-                detectBtnEnabled = false;
-                this.disabled = true;
-                statusMessage.textContent = "Processing detection...";
-                statusMessage.className = "status warning";
-                
-                fetch('/detections')
-                    .then(response => response.json())
-                    .then(data => {
-                        document.getElementById('detectionResults').textContent = JSON.stringify(data, null, 2);
-                        
-                        ctx.clearRect(0, 0, canvas.width, canvas.height);
-                        
-                        if (data.error) {
-                            statusMessage.textContent = data.error;
-                            statusMessage.className = "status error";
-                        } else if (data.detections && data.detections.length > 0) {
-                            data.detections.forEach(detection => {
-                                drawBoundingBox(detection.bbox, detection.label, detection.confidence, detection.distance);
-                            });
-                            statusMessage.textContent = `Detection complete. Found ${data.detections.length} objects.`;
-                            statusMessage.className = "status success";
-                        } else {
-                            statusMessage.textContent = "No objects detected.";
-                            statusMessage.className = "status warning";
-                        }
-                        
-                        detectBtnEnabled = true;
-                        this.disabled = false;
-                    })
-                    .catch(error => {
-                        console.error('Error fetching detections:', error);
-                        document.getElementById('detectionResults').textContent = 'Error fetching detections';
-                        statusMessage.textContent = "Error connecting to server: " + error.message;
-                        statusMessage.className = "status error";
-                        detectBtnEnabled = true;
-                        this.disabled = false;
-                    });
-            });
-            
-            document.getElementById('clearBtn').addEventListener('click', function() {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                document.getElementById('detectionResults').textContent = '';
-                statusMessage.textContent = "";
-                statusMessage.className = "status";
-            });
-            
-            updateCanvasSize();
-            
-            setInterval(() => {
-                const img = document.getElementById('videoStream');
-                if (!img.complete || img.naturalWidth === 0 || img.naturalHeight === 0) {
-                    statusMessage.textContent = "Camera stream unavailable. Reconnecting...";
-                    statusMessage.className = "status error";
-                }
-            }, 5000);
-        </script>
-    </body>
-    </html>
-    """
-    return html
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=8005, debug=False, threaded=True)
