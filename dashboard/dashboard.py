@@ -21,7 +21,6 @@ RPI2_TOPICS = {
 }
 
 RPI4_TOPICS = {
-    "detections": "pi4/detections",
     "gyro": "pi4/gyro",
     "vibration_motor_controller": "pi4/vibration_motor_controller"
 }
@@ -72,10 +71,6 @@ def on_rpi4_message(client, userdata, msg):
             last_messages["Headset Vibration Motor Controller"] = payload
             socketio.emit('mqtt_update', {'topic': 'Headset Vibration Motor Controller', 'payload': payload})
     
-        elif topic == RPI4_TOPICS["detections"]:
-            last_messages["Camera Detections"] = payload
-            socketio.emit('mqtt_update', {'topic': 'Camera Detections', 'payload': payload})
-
     except Exception as e:
         print(f"Error processing rpi4 message from {topic}: {e}")
 
@@ -126,7 +121,6 @@ def setup_mqtt():
         
         rpi4_client.subscribe(RPI4_TOPICS["gyro"])
         rpi4_client.subscribe(RPI4_TOPICS["vibration_motor_controller"])
-        rpi4_client.subscribe(RPI4_TOPICS["detections"])
         print(f"Subscribed to topics on {RPI4_BROKER}")
         rpi4_connected = True
     except Exception as e:

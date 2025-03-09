@@ -17,6 +17,16 @@
             grid-template-columns: repeat(auto-fill, minmax(450px, 1fr));
             gap: 20px;
         }
+        #cameraDetections {
+    max-height: 300px;
+    min-height: 150px;
+    overflow-y: auto;
+    overflow-x: auto;
+    resize: vertical;
+    font-family: monospace;
+    margin-bottom: 10px;
+    border: 1px solid #ddd;
+}
         .section {
             grid-column: span 2;
             background-color: #f0f4f8;
@@ -32,12 +42,27 @@
             color: #333;
         }
         .data-card {
-            background-color: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            padding: 15px;
-            margin-bottom: 20px;
-        }
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 15px;
+    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    min-height: 350px; /* Set minimum height for detection card */
+}
+.data-card .card-title {
+    flex-shrink: 0; /* Don't allow title to shrink */
+}
+
+.data-card #cameraDetections {
+    flex-grow: 1; /* Let the pre element grow to fill available space */
+}
+
+.data-card .detection-btn {
+    flex-shrink: 0; /* Don't allow button to shrink */
+    margin-top: auto; /* Push button to bottom */
+}
         .card-title {
             font-size: 18px;
             font-weight: bold;
@@ -50,8 +75,14 @@
             border-radius: 4px;
             padding: 10px;
             overflow: auto;
-            max-height: 200px;
-        }
+            max-height: 300px;
+            min-height: 100px;
+            font-size: 13px;
+            line-height: 1.4;
+            margin: 0;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }      
         .controls {
             display: flex;
             gap: 10px;
@@ -73,11 +104,6 @@
         }
         button:hover {
             background-color: #3367d6;
-        }
-        .video-stream {
-            width: 100%;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         .status-indicator {
             display: inline-block;
@@ -148,19 +174,23 @@
         }
         .camera-image {
             width: 100%;
+            max-width: 100%;
+            height: 300px;
+            object-fit: contain;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            height: 300px;
-            object-fit: cover;
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
         }
         .detection-btn {
             margin-top: 10px;
             width: 100%;
+            background-color: #4CAF50;
+            padding: 10px 20px;
+            font-size: 16px;
         }
-        @media (max-width: 1024px) {
-            .camera-grid {
-                grid-template-columns: 1fr;
-            }
+        .detection-btn:hover {
+            background-color: #45a049;
         }
         .audio-select {
             padding: 8px;
@@ -213,6 +243,31 @@
             margin-top: 10px;
             font-style: italic;
             color: #666;
+        }
+        #status {
+            flex-shrink: 0; /* Don't allow status to shrink */
+            min-height: 20px; /* Reserve space for status text */
+        }
+        .image-container {
+            position: relative;
+            width: 100%;
+            height: 300px;
+            overflow: hidden;
+        }
+        .image-placeholder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            background-color: #f8f8f8;
+            color: #666;
+            font-style: italic;
+        }
+        @media (max-width: 1024px) {
+            .camera-grid {
+                grid-template-columns: 1fr;
+            }
         }
         @media (max-width: 768px) {
             .dashboard {
@@ -267,21 +322,30 @@
                         <span class="device-label device-headset">Headset</span>
                         Live Raw Camera Stream
                     </div>
-                    <img class="camera-image" src="http://192.168.2.220:8005/video_stream" alt="Camera Stream" />
+                    <div class="image-container">
+                        <img class="camera-image" src="http://192.168.2.220:8005/video_stream" alt="Camera Stream" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                        <div class="image-placeholder" style="display:none;">Video stream unavailable</div>
+                    </div>
                 </div>
                 <div class="data-card">
                     <div class="card-title">
                         <span class="device-label device-headset">Headset</span>
                         Detection Image
                     </div>
-                    <img id="detection-image" class="camera-image" src="" alt="No detection image available" />
+                    <div class="image-container">
+                        <img id="detection-image" class="camera-image" src="" alt="No detection image available" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                        <div class="image-placeholder" style="display:flex;">No detection image available</div>
+                    </div>
                 </div>
                 <div class="data-card">
                     <div class="card-title">
                         <span class="device-label device-headset">Headset</span>
                         Depth Map
                     </div>
-                    <img id="depth-image" class="camera-image" src="" alt="No depth map available" />
+                    <div class="image-container">
+                        <img id="depth-image" class="camera-image" src="" alt="No depth map available" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                        <div class="image-placeholder" style="display:flex;">No depth map available</div>
+                    </div>
                 </div>
                 <div class="data-card">
                     <div class="card-title">
@@ -291,6 +355,7 @@
                     </div>
                     <pre id="cameraDetections">Awaiting data...</pre>
                     <button id="runDetectionBtn" class="detection-btn">Run Detection</button>
+                    <div id="status"></div>
                 </div>
             </div>
         </div>
@@ -321,7 +386,6 @@
                 </div>
             </div>
         </div>
-        
         
         <!-- Vibration Motor Section -->
         <div class="section">
@@ -582,78 +646,103 @@
                 button.disabled = false;
             });
         });
-
-        const videoElement = document.querySelector('.camera-image');
-        videoElement.onerror = function() {
-            this.src = '';
-            this.alt = 'Video stream unavailable';
-            this.style.height = '300px';
-            this.style.display = 'flex';
-            this.style.alignItems = 'center';
-            this.style.justifyContent = 'center';
-            this.style.backgroundColor = '#f8f8f8';
-            this.style.border = '1px solid #ddd';
-            this.style.color = '#666';
-            this.textContent = 'Video stream unavailable';
-        };
         
         // Run Detection Button
         document.getElementById('runDetectionBtn').addEventListener('click', function() {
             const detectionImageEl = document.getElementById('detection-image');
+            const detectionImagePlaceholder = detectionImageEl.nextElementSibling;
             const depthImageEl = document.getElementById('depth-image');
+            const depthImagePlaceholder = depthImageEl.nextElementSibling;
             const detectionsEl = document.getElementById('cameraDetections');
             const statusEl = document.getElementById('detectionsStatus');
+            const statusTextEl = document.getElementById('status');
             
             detectionsEl.textContent = "Running detection...";
             statusEl.className = 'status-indicator status-connected';
+            statusTextEl.textContent = "Running detection...";
             
             fetch('/run_detection')
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'ok') {
+                    statusTextEl.textContent = "Detection completed successfully";
+                    
                     // Update detection image
                     if (data.detection_image) {
                         detectionImageEl.src = 'data:image/jpeg;base64,' + data.detection_image;
-                        detectionImageEl.alt = 'Detection image';
+                        detectionImageEl.style.display = 'block';
+                        detectionImagePlaceholder.style.display = 'none';
                     } else {
-                        detectionImageEl.alt = 'No detection image available';
+                        detectionImageEl.style.display = 'none';
+                        detectionImagePlaceholder.style.display = 'flex';
+                        detectionImagePlaceholder.textContent = 'No detection image available';
                     }
                     
                     // Update depth map
                     if (data.depth_image) {
                         depthImageEl.src = 'data:image/jpeg;base64,' + data.depth_image;
-                        depthImageEl.alt = 'Depth map';
+                        depthImageEl.style.display = 'block';
+                        depthImagePlaceholder.style.display = 'none';
                     } else {
-                        depthImageEl.alt = 'No depth map available';
+                        depthImageEl.style.display = 'none';
+                        depthImagePlaceholder.style.display = 'flex';
+                        depthImagePlaceholder.textContent = 'No depth map available';
                     }
                     
-                    // Update detections text
-                    if (data.detections && data.detections.length > 0) {
-                        let formattedDetections = {
-                            timestamp: new Date(data.timestamp * 1000).toLocaleTimeString(),
-                            detected_classes: data.detected_classes,
-                            objects: data.detections.map(det => ({
-                                label: det.label,
-                                confidence: det.confidence.toFixed(2),
-                                distance: det.distance !== undefined ? det.distance.toFixed(2) + 'm' : 'unknown'
-                            }))
-                        };
-                        
-                        detectionsEl.textContent = JSON.stringify(formattedDetections, null, 2);
-                    } else {
-                        detectionsEl.textContent = "No objects detected";
-                    }
+                    // Just output the response directly without formatting
+                    detectionsEl.textContent = JSON.stringify(data, null, 2);
                 } else {
+                    statusTextEl.textContent = "Error: " + (data.error || "Unknown error");
                     detectionsEl.textContent = "Error: " + (data.error || "Unknown error");
-                    detectionImageEl.alt = 'Detection failed';
-                    depthImageEl.alt = 'Depth map unavailable';
+                    
+                    detectionImageEl.style.display = 'none';
+                    detectionImagePlaceholder.style.display = 'flex';
+                    detectionImagePlaceholder.textContent = 'Detection failed';
+                    
+                    depthImageEl.style.display = 'none';
+                    depthImagePlaceholder.style.display = 'flex';
+                    depthImagePlaceholder.textContent = 'Depth map unavailable';
                 }
+                
+                setTimeout(() => {
+                    statusTextEl.textContent = "";
+                }, 5000);
             })
             .catch(error => {
                 detectionsEl.textContent = "Request failed: " + error.message;
                 statusEl.className = 'status-indicator status-disconnected';
+                statusTextEl.textContent = "Request failed: " + error.message;
+                
+                setTimeout(() => {
+                    statusTextEl.textContent = "";
+                }, 5000);
             });
         });
+        
+        // Handle image loading errors
+        function setupImageErrorHandling(imageId) {
+            const imgEl = document.getElementById(imageId);
+            if (imgEl) {
+                imgEl.addEventListener('error', function() {
+                    this.style.display = 'none';
+                    const placeholder = this.nextElementSibling;
+                    if (placeholder) {
+                        placeholder.style.display = 'flex';
+                    }
+                });
+                
+                imgEl.addEventListener('load', function() {
+                    this.style.display = 'block';
+                    const placeholder = this.nextElementSibling;
+                    if (placeholder) {
+                        placeholder.style.display = 'none';
+                    }
+                });
+            }
+        }
+        
+        setupImageErrorHandling('detection-image');
+        setupImageErrorHandling('depth-image');
         
         // Audio Player Controls
         document.getElementById('playAudioButton').addEventListener('click', function() {
@@ -748,6 +837,19 @@
             });
         });
 
+        // Initialize by getting the current volume
+        fetch('/get_volume')
+            .then(response => response.json())
+            .then(data => {
+                if (data.volume !== undefined) {
+                    volumeSlider.value = data.volume;
+                    volumeValue.textContent = data.volume;
+                }
+            })
+            .catch(error => {
+                console.error("Error initializing volume:", error);
+            });
+
         // Text-to-Speech Controls
         document.getElementById('speakButton').addEventListener('click', function() {
             const text = document.getElementById('ttsText').value;
@@ -784,19 +886,6 @@
                 statusElement.textContent = `Error: ${error.message}`;
             });
         });
-
-        // Initialize by getting the current volume
-        fetch('/get_volume')
-            .then(response => response.json())
-            .then(data => {
-                if (data.volume !== undefined) {
-                    volumeSlider.value = data.volume;
-                    volumeValue.textContent = data.volume;
-                }
-            })
-            .catch(error => {
-                console.error("Error initializing volume:", error);
-            });
     </script>
 </body>
 </html>
