@@ -7,7 +7,7 @@ MQTT_BROKER = "0.0.0.0"
 MQTT_PORT = 1883
 MQTT_TOPIC = "pi2/gyro"
 MPU_ADDRESS = 0x68
-PUBLISH_FREQUENCY = 0.1
+PUBLISH_FREQUENCY = 0.05
 
 def setup_mqtt():
     """
