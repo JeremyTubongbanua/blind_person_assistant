@@ -19,7 +19,8 @@ MQTT_KEEPALIVE = 60
 RPI2_TOPICS = {
     "button_state": "pi2/button_state",
     "gyro": "pi2/gyro",
-    "vibration_motor_response": "pi2/vibration_motor_response"
+    "vibration_motor_response": "pi2/vibration_motor_response",
+    "pitch_yaw_roll": "pi2/pitch_yaw_roll"
 }
 
 RPI4_TOPICS = {
@@ -86,6 +87,10 @@ def on_rpi2_message(client, userdata, msg):
         elif topic == RPI2_TOPICS["vibration_motor_response"]:
             last_messages[MESSAGE_CATEGORIES["VIBRATION_MOTOR_RESPONSE"]] = payload
             socketio.emit(SOCKETIO_MQTT_UPDATE, {'topic': MESSAGE_CATEGORIES["VIBRATION_MOTOR_RESPONSE"], 'payload': payload})
+    
+        elif topic == RPI2_TOPICS["pitch_yaw_roll"]:
+            last_messages[MESSAGE_CATEGORIES["PITCH_YAW_ROLL"]] = payload
+            socketio.emit(SOCKETIO_MQTT_MESSAGE, {'topic': topic, 'payload': msg.payload.decode()})
     
     except Exception as e:
         print(f"Error processing rpi2 message from {topic}: {e}")
@@ -295,6 +300,14 @@ def text_to_speech():
 def calibrate_headset_gyro():
     try:
         response = requests.get(f"http://{RPI4_BROKER}:5002/calibrate")
+        return jsonify(response.json()), response.status_code
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+@app.route('/calibrate_cane_gyro', methods=['GET'])
+def calibrate_cane_gyro():
+    try:
+        response = requests.get(f"http://{RPI2_BROKER}:5002/calibrate")
         return jsonify(response.json()), response.status_code
     except Exception as e:
         return jsonify({"error": str(e)}), 500

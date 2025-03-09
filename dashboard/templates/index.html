@@ -421,18 +421,72 @@
 
         <script>
             document.getElementById('calibrateButton').addEventListener('click', function() {
-            fetch('/calibrate_headset_gyro', {
+                alert('Calibration request sent to headset. Please wait...');
+                
+                const statusArea = document.getElementById('pitchYawRollRaw');
+                statusArea.textContent = "Calibrating headset gyro... please wait";
+                
+                fetch('/calibrate_headset_gyro', {
+                    method: 'GET'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    statusArea.textContent = "Calibration complete!\nResponse: " + JSON.stringify(data, null, 2);
+                })
+                .catch(error => {
+                    statusArea.textContent = "Calibration failed: " + error.message;
+                });
+            });
+        </script>
+
+    <div class="section">
+        <div class="section-title">
+        <span class="device-label device-cane">Cane</span>
+        Orientation Gauges
+        <span id="canePitchYawRollStatus" class="status-indicator"></span>
+        </div>
+        <div class="data-card">
+        <div class="gauge-grid">
+            <div class="gauge-container">
+            <div id="canePitchGauge"></div>
+            <div id="canePitchValue" class="gauge-value">0°</div>
+            <div class="gauge-label">Pitch</div>
+            </div>
+            <div class="gauge-container">
+            <div id="caneYawGauge"></div>
+            <div id="caneYawValue" class="gauge-value">0°</div>
+            <div class="gauge-label">Yaw</div>
+            </div>
+            <div class="gauge-container">
+            <div id="caneRollGauge"></div>
+            <div id="caneRollValue" class="gauge-value">0°</div>
+            <div class="gauge-label">Roll</div>
+            </div>
+        </div>
+        <pre id="canePitchYawRollRaw" style="margin-top: 20px; max-height: 100px;">Awaiting data...</pre>
+        <button id="caneCalibrateButton" class="detection-btn">Calibrate</button>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('caneCalibrateButton').addEventListener('click', function() {
+            alert('Calibration request sent to cane. Please wait...');
+            
+            const statusArea = document.getElementById('canePitchYawRollRaw');
+            statusArea.textContent = "Calibrating cane gyro... please wait";
+            
+            fetch('/calibrate_cane_gyro', {
                 method: 'GET'
             })
             .then(response => response.json())
             .then(data => {
-                alert('Calibration successful: ' + JSON.stringify(data));
+                statusArea.textContent = "Calibration complete!\nResponse: " + JSON.stringify(data, null, 2);
             })
             .catch(error => {
-                alert('Calibration failed: ' + error.message);
+                statusArea.textContent = "Calibration failed: " + error.message;
             });
-            });
-        </script>
+        });
+    </script>
 
 
         <div class="section">
@@ -594,7 +648,7 @@
             'Vibration Motor Response': { element: document.getElementById('vibrationMotorResponse'), status: document.getElementById('vibrationResponseStatus') },
             'Camera Detections': { element: document.getElementById('cameraDetections'), status: document.getElementById('detectionsStatus') },
             'Headset Gyro': { element: document.getElementById('headsetGyro'), status: document.getElementById('headsetGyroStatus') },
-            'Headset Vibration Motor Controller': { element: document.getElementById('headsetVibrationMotorController'), status: document.getElementById('headsetVibrationStatus') }
+            'Headset Vibration Motor Controller': { element: document.getElementById('headsetVibrationMotorController'), status: document.getElementById('headsetVibrationStatus') },
         };
 
         const rpi2ConnectionStatus = document.getElementById('rpi2ConnectionStatus');
@@ -721,6 +775,10 @@
         const updatePitchGauge = createGauge('pitchGauge', -90, 90);
         const updateYawGauge = createGauge('yawGauge', -90, 90);
         const updateRollGauge = createGauge('rollGauge', -90, 90);
+
+        const updateCanePitchGauge = createGauge('canePitchGauge', -90, 90);
+        const updateCaneYawGauge = createGauge('caneYawGauge', -90, 90);
+        const updateCaneRollGauge = createGauge('caneRollGauge', -90, 90);
         
         socket.on('connect', function() {
             console.log('Connected to server');
@@ -730,6 +788,13 @@
                     try {
                         const payload = JSON.parse(data.payload);
                         updateGyroGauges(payload);
+                    } catch (e) {
+                        console.error('Error parsing pitch_yaw_roll data:', e);
+                    }
+                } else if(data.topic == 'pi2/pitch_yaw_roll') {
+                    try {
+                        const payload = JSON.parse(data.payload);
+                        updateCaneGyroGauges(payload);
                     } catch (e) {
                         console.error('Error parsing pitch_yaw_roll data:', e);
                     }
@@ -770,6 +835,40 @@
             }, 10000);
         }
         
+        function updateCaneGyroGauges(data) {
+            const pitchValue = document.getElementById('canePitchValue');
+            const yawValue = document.getElementById('caneYawValue');
+            const rollValue = document.getElementById('caneRollValue');
+            const canePitchYawRollRaw = document.getElementById('canePitchYawRollRaw');
+            const canePitchYawRollStatus = document.getElementById('canePitchYawRollStatus');
+            
+            if (data.pitch !== undefined) {
+                updateCanePitchGauge(data.pitch);
+                pitchValue.textContent = data.pitch.toFixed(1) + '°';
+            }
+            
+            if (data.yaw !== undefined) {
+                updateCaneYawGauge(data.yaw);
+                yawValue.textContent = data.yaw.toFixed(1) + '°';
+            }
+            
+            if (data.roll !== undefined) {
+                updateCaneRollGauge(data.roll);
+                rollValue.textContent = data.roll.toFixed(1) + '°';
+            }
+            
+            canePitchYawRollRaw.textContent = JSON.stringify(data, null, 2);
+            canePitchYawRollStatus.className = 'status-indicator status-connected';
+            
+            if (statusUpdates['cane_pitch_yaw_roll']) {
+                clearTimeout(statusUpdates['cane_pitch_yaw_roll']);
+            }
+            
+            statusUpdates['cane_pitch_yaw_roll'] = setTimeout(() => {
+                canePitchYawRollStatus.className = 'status-indicator status-disconnected';
+            }, 10000);
+        }
+
         socket.on('mqtt_update', function(data) {
             const { topic, payload } = data;
             
