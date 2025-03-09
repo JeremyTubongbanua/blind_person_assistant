@@ -182,6 +182,24 @@ def vibrate():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/run_detection', methods=['GET'])
+def run_detection():
+    try:
+        response = requests.get("http://192.168.2.220:8005/detections")
+        detection_data = response.json()
+        
+        # If the request was successful, save to local cache
+        if 'status' in detection_data and detection_data['status'] == 'ok':
+            last_messages["Camera Detections"] = detection_data
+            socketio.emit('mqtt_update', {'topic': 'Camera Detections', 'payload': detection_data})
+        
+        return jsonify(detection_data), 200
+    except Exception as e:
+        return jsonify({
+            "error": str(e),
+            "status": "error"
+        }), 500
+
 @app.route('/get_all_data')
 def get_all_data():
     return jsonify(last_messages)

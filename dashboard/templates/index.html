@@ -141,6 +141,27 @@
         .device-cane {
             background-color: #34a853;
         }
+        .camera-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .camera-image {
+            width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            height: 300px;
+            object-fit: cover;
+        }
+        .detection-btn {
+            margin-top: 10px;
+            width: 100%;
+        }
+        @media (max-width: 1024px) {
+            .camera-grid {
+                grid-template-columns: 1fr;
+            }
+        }
         .audio-select {
             padding: 8px;
             border: 1px solid #ccc;
@@ -240,25 +261,36 @@
         <!-- Camera Section -->
         <div class="section">
             <div class="section-title">Camera</div>
-            <div class="flex-container">
-                <div class="flex-column">
-                    <div class="data-card">
-                        <div class="card-title">
-                            <span class="device-label device-headset">Headset</span>
-                            Camera Feed
-                        </div>
-                        <img class="video-stream" src="http://192.168.2.220:8005/video_stream" alt="Camera Stream" />
+            <div class="camera-grid">
+                <div class="data-card">
+                    <div class="card-title">
+                        <span class="device-label device-headset">Headset</span>
+                        Live Raw Camera Stream
                     </div>
+                    <img class="camera-image" src="http://192.168.2.220:8005/video_stream" alt="Camera Stream" />
                 </div>
-                <div class="flex-column">
-                    <div class="data-card">
-                        <div class="card-title">
-                            <span class="device-label device-headset">Headset</span>
-                            Camera Detections
-                            <span id="detectionsStatus" class="status-indicator"></span>
-                        </div>
-                        <pre id="cameraDetections">Awaiting data...</pre>
+                <div class="data-card">
+                    <div class="card-title">
+                        <span class="device-label device-headset">Headset</span>
+                        Detection Image
                     </div>
+                    <img id="detection-image" class="camera-image" src="" alt="No detection image available" />
+                </div>
+                <div class="data-card">
+                    <div class="card-title">
+                        <span class="device-label device-headset">Headset</span>
+                        Depth Map
+                    </div>
+                    <img id="depth-image" class="camera-image" src="" alt="No depth map available" />
+                </div>
+                <div class="data-card">
+                    <div class="card-title">
+                        <span class="device-label device-headset">Headset</span>
+                        Camera Detections
+                        <span id="detectionsStatus" class="status-indicator"></span>
+                    </div>
+                    <pre id="cameraDetections">Awaiting data...</pre>
+                    <button id="runDetectionBtn" class="detection-btn">Run Detection</button>
                 </div>
             </div>
         </div>
@@ -551,7 +583,7 @@
             });
         });
 
-        const videoElement = document.querySelector('.video-stream');
+        const videoElement = document.querySelector('.camera-image');
         videoElement.onerror = function() {
             this.src = '';
             this.alt = 'Video stream unavailable';
@@ -564,6 +596,64 @@
             this.style.color = '#666';
             this.textContent = 'Video stream unavailable';
         };
+        
+        // Run Detection Button
+        document.getElementById('runDetectionBtn').addEventListener('click', function() {
+            const detectionImageEl = document.getElementById('detection-image');
+            const depthImageEl = document.getElementById('depth-image');
+            const detectionsEl = document.getElementById('cameraDetections');
+            const statusEl = document.getElementById('detectionsStatus');
+            
+            detectionsEl.textContent = "Running detection...";
+            statusEl.className = 'status-indicator status-connected';
+            
+            fetch('/run_detection')
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    // Update detection image
+                    if (data.detection_image) {
+                        detectionImageEl.src = 'data:image/jpeg;base64,' + data.detection_image;
+                        detectionImageEl.alt = 'Detection image';
+                    } else {
+                        detectionImageEl.alt = 'No detection image available';
+                    }
+                    
+                    // Update depth map
+                    if (data.depth_image) {
+                        depthImageEl.src = 'data:image/jpeg;base64,' + data.depth_image;
+                        depthImageEl.alt = 'Depth map';
+                    } else {
+                        depthImageEl.alt = 'No depth map available';
+                    }
+                    
+                    // Update detections text
+                    if (data.detections && data.detections.length > 0) {
+                        let formattedDetections = {
+                            timestamp: new Date(data.timestamp * 1000).toLocaleTimeString(),
+                            detected_classes: data.detected_classes,
+                            objects: data.detections.map(det => ({
+                                label: det.label,
+                                confidence: det.confidence.toFixed(2),
+                                distance: det.distance !== undefined ? det.distance.toFixed(2) + 'm' : 'unknown'
+                            }))
+                        };
+                        
+                        detectionsEl.textContent = JSON.stringify(formattedDetections, null, 2);
+                    } else {
+                        detectionsEl.textContent = "No objects detected";
+                    }
+                } else {
+                    detectionsEl.textContent = "Error: " + (data.error || "Unknown error");
+                    detectionImageEl.alt = 'Detection failed';
+                    depthImageEl.alt = 'Depth map unavailable';
+                }
+            })
+            .catch(error => {
+                detectionsEl.textContent = "Request failed: " + error.message;
+                statusEl.className = 'status-indicator status-disconnected';
+            });
+        });
         
         // Audio Player Controls
         document.getElementById('playAudioButton').addEventListener('click', function() {
