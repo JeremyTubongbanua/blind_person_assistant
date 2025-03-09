@@ -291,6 +291,30 @@
             height: auto;
             max-width: 150px;
         }
+        .orientation-section {
+            margin-bottom: 30px;
+        }
+        .calibration-status {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+            min-height: 60px;
+        }
+        #vibrateStatus {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+            min-height: 20px;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+        .stacked-cards {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
         @media (max-width: 1024px) {
             .camera-grid {
                 grid-template-columns: 1fr;
@@ -390,104 +414,72 @@
             </div>
         </div>
 
+        <!-- Pitch Yaw Roll Section -->
         <div class="section">
-            <div class="section-title">
-            <span class="device-label device-headset">Headset</span>
-            Orientation Gauges
-            <span id="pitchYawRollStatus" class="status-indicator"></span>
-            </div>
-            <div class="data-card">
-            <div class="gauge-grid">
-                <div class="gauge-container">
-                <div id="pitchGauge"></div>
-                <div id="pitchValue" class="gauge-value">0°</div>
-                <div class="gauge-label">Pitch</div>
-                </div>
-                <div class="gauge-container">
-                <div id="yawGauge"></div>
-                <div id="yawValue" class="gauge-value">0°</div>
-                <div class="gauge-label">Yaw</div>
-                </div>
-                <div class="gauge-container">
-                <div id="rollGauge"></div>
-                <div id="rollValue" class="gauge-value">0°</div>
-                <div class="gauge-label">Roll</div>
-                </div>
-            </div>
-            <pre id="pitchYawRollRaw" style="margin-top: 20px; max-height: 100px;">Awaiting data...</pre>
-            <button id="calibrateButton" class="detection-btn">Calibrate</button>
-            </div>
-        </div>
-
-        <script>
-            document.getElementById('calibrateButton').addEventListener('click', function() {
-                alert('Calibration request sent to headset. Please wait...');
-                
-                const statusArea = document.getElementById('pitchYawRollRaw');
-                statusArea.textContent = "Calibrating headset gyro... please wait";
-                
-                fetch('/calibrate_headset_gyro', {
-                    method: 'GET'
-                })
-                .then(response => response.json())
-                .then(data => {
-                    statusArea.textContent = "Calibration complete!\nResponse: " + JSON.stringify(data, null, 2);
-                })
-                .catch(error => {
-                    statusArea.textContent = "Calibration failed: " + error.message;
-                });
-            });
-        </script>
-
-    <div class="section">
-        <div class="section-title">
-        <span class="device-label device-cane">Cane</span>
-        Orientation Gauges
-        <span id="canePitchYawRollStatus" class="status-indicator"></span>
-        </div>
-        <div class="data-card">
-        <div class="gauge-grid">
-            <div class="gauge-container">
-            <div id="canePitchGauge"></div>
-            <div id="canePitchValue" class="gauge-value">0°</div>
-            <div class="gauge-label">Pitch</div>
-            </div>
-            <div class="gauge-container">
-            <div id="caneYawGauge"></div>
-            <div id="caneYawValue" class="gauge-value">0°</div>
-            <div class="gauge-label">Yaw</div>
-            </div>
-            <div class="gauge-container">
-            <div id="caneRollGauge"></div>
-            <div id="caneRollValue" class="gauge-value">0°</div>
-            <div class="gauge-label">Roll</div>
-            </div>
-        </div>
-        <pre id="canePitchYawRollRaw" style="margin-top: 20px; max-height: 100px;">Awaiting data...</pre>
-        <button id="caneCalibrateButton" class="detection-btn">Calibrate</button>
-        </div>
-    </div>
-
-    <script>
-        document.getElementById('caneCalibrateButton').addEventListener('click', function() {
-            alert('Calibration request sent to cane. Please wait...');
+            <div class="section-title">Pitch Yaw Roll</div>
             
-            const statusArea = document.getElementById('canePitchYawRollRaw');
-            statusArea.textContent = "Calibrating cane gyro... please wait";
+            <!-- Headset Orientation -->
+            <div class="orientation-section">
+                <div class="data-card">
+                    <div class="card-title">
+                        <span class="device-label device-headset">Headset</span>
+                        Orientation Gauges
+                        <span id="pitchYawRollStatus" class="status-indicator"></span>
+                    </div>
+                    <div class="gauge-grid">
+                        <div class="gauge-container">
+                            <div id="pitchGauge"></div>
+                            <div id="pitchValue" class="gauge-value">0°</div>
+                            <div class="gauge-label">Pitch</div>
+                        </div>
+                        <div class="gauge-container">
+                            <div id="yawGauge"></div>
+                            <div id="yawValue" class="gauge-value">0°</div>
+                            <div class="gauge-label">Yaw</div>
+                        </div>
+                        <div class="gauge-container">
+                            <div id="rollGauge"></div>
+                            <div id="rollValue" class="gauge-value">0°</div>
+                            <div class="gauge-label">Roll</div>
+                        </div>
+                    </div>
+                    <pre id="pitchYawRollRaw" style="margin-top: 20px; max-height: 100px;">Awaiting data...</pre>
+                    <button id="calibrateButton" class="detection-btn">Calibrate</button>
+                    <div id="headsetCalibrationStatus" class="calibration-status"></div>
+                </div>
+            </div>
             
-            fetch('/calibrate_cane_gyro', {
-                method: 'GET'
-            })
-            .then(response => response.json())
-            .then(data => {
-                statusArea.textContent = "Calibration complete!\nResponse: " + JSON.stringify(data, null, 2);
-            })
-            .catch(error => {
-                statusArea.textContent = "Calibration failed: " + error.message;
-            });
-        });
-    </script>
-
+            <!-- Cane Orientation -->
+            <div class="orientation-section">
+                <div class="data-card">
+                    <div class="card-title">
+                        <span class="device-label device-cane">Cane</span>
+                        Orientation Gauges
+                        <span id="canePitchYawRollStatus" class="status-indicator"></span>
+                    </div>
+                    <div class="gauge-grid">
+                        <div class="gauge-container">
+                            <div id="canePitchGauge"></div>
+                            <div id="canePitchValue" class="gauge-value">0°</div>
+                            <div class="gauge-label">Pitch</div>
+                        </div>
+                        <div class="gauge-container">
+                            <div id="caneYawGauge"></div>
+                            <div id="caneYawValue" class="gauge-value">0°</div>
+                            <div class="gauge-label">Yaw</div>
+                        </div>
+                        <div class="gauge-container">
+                            <div id="caneRollGauge"></div>
+                            <div id="caneRollValue" class="gauge-value">0°</div>
+                            <div class="gauge-label">Roll</div>
+                        </div>
+                    </div>
+                    <pre id="canePitchYawRollRaw" style="margin-top: 20px; max-height: 100px;">Awaiting data...</pre>
+                    <button id="caneCalibrateButton" class="detection-btn">Calibrate</button>
+                    <div id="caneCalibrationStatus" class="calibration-status"></div>
+                </div>
+            </div>
+        </div>
 
         <div class="section">
             <div class="section-title">Raw Gyroscope</div>
@@ -518,45 +510,43 @@
         <!-- Vibration Motor Section -->
         <div class="section">
             <div class="section-title">Vibration Motors</div>
-            <div class="flex-container">
-                <div class="flex-column">
-                    <div class="data-card">
-                        <div class="card-title">
-                            <span class="device-label device-cane">Cane</span>
-                            Vibrate Controls
-                        </div>
-                        <div class="controls">
-                            <div>
-                                <label for="leftDuration">Left Duration (seconds)</label>
-                                <input type="number" id="leftDuration" min="0" step="0.1" value="0.5">
-                            </div>
-                            <div>
-                                <label for="rightDuration">Right Duration (seconds)</label>
-                                <input type="number" id="rightDuration" min="0" step="0.1" value="0.5">
-                            </div>
-                            <button id="vibrateButton">Vibrate</button>
-                        </div>
-                        <div id="vibrateStatus"></div>
+            <div class="flex-column">
+                <div class="data-card">
+                    <div class="card-title">
+                        <span class="device-label device-cane">Cane</span>
+                        Vibrate Controls
                     </div>
-                </div>
-                <div class="flex-column">
-                    <div class="data-card">
-                        <div class="card-title">
-                            <span class="device-label device-cane">Cane</span>
-                            Vibration Motor Response
-                            <span id="vibrationResponseStatus" class="status-indicator"></span>
+                    <div class="controls">
+                        <div>
+                            <label for="leftDuration">Left Duration (seconds)</label>
+                            <input type="number" id="leftDuration" min="0" step="0.1" value="0.5">
                         </div>
-                        <pre id="vibrationMotorResponse">Awaiting data...</pre>
+                        <div>
+                            <label for="rightDuration">Right Duration (seconds)</label>
+                            <input type="number" id="rightDuration" min="0" step="0.1" value="0.5">
+                        </div>
+                        <button id="vibrateButton">Vibrate</button>
                     </div>
+                    <div id="vibrateStatus"></div>
                 </div>
             </div>
-            <div class="data-card">
-                <div class="card-title">
-                    <span class="device-label device-headset">Headset</span>
-                    Vibration Motor Controller
-                    <span id="headsetVibrationStatus" class="status-indicator"></span>
+            <div class="stacked-cards">
+                <div class="data-card">
+                    <div class="card-title">
+                        <span class="device-label device-cane">Cane</span>
+                        Vibration Motor Response
+                        <span id="vibrationResponseStatus" class="status-indicator"></span>
+                    </div>
+                    <pre id="vibrationMotorResponse">Awaiting data...</pre>
                 </div>
-                <pre id="headsetVibrationMotorController">Awaiting data...</pre>
+                <div class="data-card">
+                    <div class="card-title">
+                        <span class="device-label device-headset">Headset</span>
+                        Vibration Motor Controller
+                        <span id="headsetVibrationStatus" class="status-indicator"></span>
+                    </div>
+                    <pre id="headsetVibrationMotorController">Awaiting data...</pre>
+                </div>
             </div>
         </div>
 
@@ -655,6 +645,8 @@
         const rpi4ConnectionStatus = document.getElementById('rpi4ConnectionStatus');
         const refreshStatus = document.getElementById('refreshStatus');
         const pitchYawRollStatus = document.getElementById('pitchYawRollStatus');
+        const headsetCalibrationStatus = document.getElementById('headsetCalibrationStatus');
+        const caneCalibrationStatus = document.getElementById('caneCalibrationStatus');
         
         function polarToCartesian(centerX, centerY, radius, angleInDegrees) {
             const angleInRadians = (angleInDegrees - 90) * Math.PI / 180.0;
@@ -1213,6 +1205,39 @@
             })
             .catch(error => {
                 statusElement.textContent = `Error: ${error.message}`;
+            });
+        });
+        
+        // Add event listeners for calibrate buttons
+        document.getElementById('calibrateButton').addEventListener('click', function() {
+            const statusArea = document.getElementById('headsetCalibrationStatus');
+            statusArea.textContent = "Calibrating headset gyro... please wait";
+            
+            fetch('/calibrate_headset_gyro', {
+                method: 'GET'
+            })
+            .then(response => response.json())
+            .then(data => {
+                statusArea.textContent = "Calibration complete!\nResponse: " + JSON.stringify(data, null, 2);
+            })
+            .catch(error => {
+                statusArea.textContent = "Calibration failed: " + error.message;
+            });
+        });
+        
+        document.getElementById('caneCalibrateButton').addEventListener('click', function() {
+            const statusArea = document.getElementById('caneCalibrationStatus');
+            statusArea.textContent = "Calibrating cane gyro... please wait";
+            
+            fetch('/calibrate_cane_gyro', {
+                method: 'GET'
+            })
+            .then(response => response.json())
+            .then(data => {
+                statusArea.textContent = "Calibration complete!\nResponse: " + JSON.stringify(data, null, 2);
+            })
+            .catch(error => {
+                statusArea.textContent = "Calibration failed: " + error.message;
             });
         });
     </script>
