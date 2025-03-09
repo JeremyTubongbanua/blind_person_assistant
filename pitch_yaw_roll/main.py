@@ -5,6 +5,8 @@ import math
 import time
 import signal
 import sys
+from flask import Flask, jsonify
+import threading
 
 MQTT_BROKER = "localhost"
 MQTT_PORT = 1883
@@ -25,6 +27,9 @@ YAW_DRIFT_COMPENSATION = 0.98
 ALPHA = 0.96
 
 NOISE_THRESHOLD = 0.03
+
+app = Flask(__name__)
+HTTP_PORT = 5002
 
 def on_connect(client, userdata, flags, rc):
     print(f"Connected to MQTT broker with result code {rc}")
@@ -112,6 +117,26 @@ def on_message(client, userdata, msg):
     except Exception as e:
         print(f"Error processing message: {e}")
 
+@app.route('/calibrate', methods=['GET'])
+def reset_calibration():
+    global gyro_calibration, calibration_samples, is_calibrating, first_message, last_timestamp, gyro_integrated
+    
+    print("Resetting calibration...")
+    gyro_calibration = {"x": 0, "y": 0, "z": 0}
+    calibration_samples = 0
+    is_calibrating = True
+    first_message = True
+    last_timestamp = 0
+    gyro_integrated = {"roll": 0, "pitch": 0, "yaw": 0}
+    
+    return jsonify({
+        "status": "success",
+        "message": "Calibration reset. The system will recalibrate with the next 10 samples."
+    })
+
+def run_flask():
+    app.run(host='0.0.0.0', port=HTTP_PORT)
+
 def signal_handler(sig, frame):
     print("Shutting down service")
     client.loop_stop()
@@ -133,8 +158,12 @@ if __name__ == '__main__':
         
         client.loop_start()
         
+        print(f"Starting HTTP server on port {HTTP_PORT}")
+        flask_thread = threading.Thread(target=run_flask, daemon=True)
+        flask_thread.start()
+        
         while True:
-            time.sleep(0.05)
+            time.sleep(1)
             
     except Exception as e:
         print(f"Error: {e}")

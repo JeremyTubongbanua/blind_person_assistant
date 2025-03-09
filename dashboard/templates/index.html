@@ -18,15 +18,15 @@
             gap: 20px;
         }
         #cameraDetections {
-    max-height: 300px;
-    min-height: 150px;
-    overflow-y: auto;
-    overflow-x: auto;
-    resize: vertical;
-    font-family: monospace;
-    margin-bottom: 10px;
-    border: 1px solid #ddd;
-}
+            max-height: 300px;
+            min-height: 150px;
+            overflow-y: auto;
+            overflow-x: auto;
+            resize: vertical;
+            font-family: monospace;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+        }
         .section {
             grid-column: span 2;
             background-color: #f0f4f8;
@@ -42,27 +42,25 @@
             color: #333;
         }
         .data-card {
-    background-color: white;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    padding: 15px;
-    margin-bottom: 20px;
-    display: flex;
-    flex-direction: column;
-    min-height: 350px; /* Set minimum height for detection card */
-}
-.data-card .card-title {
-    flex-shrink: 0; /* Don't allow title to shrink */
-}
-
-.data-card #cameraDetections {
-    flex-grow: 1; /* Let the pre element grow to fill available space */
-}
-
-.data-card .detection-btn {
-    flex-shrink: 0; /* Don't allow button to shrink */
-    margin-top: auto; /* Push button to bottom */
-}
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 15px;
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            min-height: 350px;
+        }
+        .data-card .card-title {
+            flex-shrink: 0;
+        }
+        .data-card #cameraDetections {
+            flex-grow: 1;
+        }
+        .data-card .detection-btn {
+            flex-shrink: 0;
+            margin-top: auto;
+        }
         .card-title {
             font-size: 18px;
             font-weight: bold;
@@ -245,8 +243,8 @@
             color: #666;
         }
         #status {
-            flex-shrink: 0; /* Don't allow status to shrink */
-            min-height: 20px; /* Reserve space for status text */
+            flex-shrink: 0;
+            min-height: 20px;
         }
         .image-container {
             position: relative;
@@ -264,8 +262,40 @@
             color: #666;
             font-style: italic;
         }
+        .gauge-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .gauge-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            width: 100%;
+        }
+        .gauge-value {
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        .gauge-label {
+            text-align: center;
+            font-size: 16px;
+            color: #666;
+            margin-top: 5px;
+        }
+        .svg-gauge {
+            width: 100%;
+            height: auto;
+            max-width: 150px;
+        }
         @media (max-width: 1024px) {
             .camera-grid {
+                grid-template-columns: 1fr;
+            }
+            .gauge-grid {
                 grid-template-columns: 1fr;
             }
         }
@@ -359,6 +389,51 @@
                 </div>
             </div>
         </div>
+
+        <div class="section">
+            <div class="section-title">
+            <span class="device-label device-headset">Headset</span>
+            Orientation Gauges
+            <span id="pitchYawRollStatus" class="status-indicator"></span>
+            </div>
+            <div class="data-card">
+            <div class="gauge-grid">
+                <div class="gauge-container">
+                <div id="pitchGauge"></div>
+                <div id="pitchValue" class="gauge-value">0°</div>
+                <div class="gauge-label">Pitch</div>
+                </div>
+                <div class="gauge-container">
+                <div id="yawGauge"></div>
+                <div id="yawValue" class="gauge-value">0°</div>
+                <div class="gauge-label">Yaw</div>
+                </div>
+                <div class="gauge-container">
+                <div id="rollGauge"></div>
+                <div id="rollValue" class="gauge-value">0°</div>
+                <div class="gauge-label">Roll</div>
+                </div>
+            </div>
+            <pre id="pitchYawRollRaw" style="margin-top: 20px; max-height: 100px;">Awaiting data...</pre>
+            <button id="calibrateButton" class="detection-btn">Calibrate</button>
+            </div>
+        </div>
+
+        <script>
+            document.getElementById('calibrateButton').addEventListener('click', function() {
+            fetch('/calibrate_headset_gyro', {
+                method: 'GET'
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert('Calibration successful: ' + JSON.stringify(data));
+            })
+            .catch(error => {
+                alert('Calibration failed: ' + error.message);
+            });
+            });
+        </script>
+
 
         <!-- Gyro Section -->
         <div class="section">
@@ -526,10 +601,175 @@
         const rpi2ConnectionStatus = document.getElementById('rpi2ConnectionStatus');
         const rpi4ConnectionStatus = document.getElementById('rpi4ConnectionStatus');
         const refreshStatus = document.getElementById('refreshStatus');
+        const pitchYawRollStatus = document.getElementById('pitchYawRollStatus');
+        
+        function polarToCartesian(centerX, centerY, radius, angleInDegrees) {
+            const angleInRadians = (angleInDegrees - 90) * Math.PI / 180.0;
+            return {
+                x: centerX + (radius * Math.cos(angleInRadians)),
+                y: centerY + (radius * Math.sin(angleInRadians))
+            };
+        }
+        
+        function describeArc(x, y, radius, startAngle, endAngle) {
+            const start = polarToCartesian(x, y, radius, endAngle);
+            const end = polarToCartesian(x, y, radius, startAngle);
+            const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
+            const d = [
+                "M", start.x, start.y, 
+                "A", radius, radius, 0, largeArcFlag, 0, end.x, end.y
+            ].join(" ");
+            return d;       
+        }
+        
+        function mapRange(value, inputMin, inputMax, outputMin, outputMax) {
+            return ((value - inputMin) / (inputMax - inputMin)) * (outputMax - outputMin) + outputMin;
+        }
+        
+        function createGauge(elementId, min, max) {
+            const container = document.getElementById(elementId);
+            
+            const svgNS = "http://www.w3.org/2000/svg";
+            const svg = document.createElementNS(svgNS, "svg");
+            svg.setAttribute("class", "svg-gauge");
+            svg.setAttribute("viewBox", "0 0 100 100");
+            
+            const backgroundArc = document.createElementNS(svgNS, "path");
+            backgroundArc.setAttribute("d", describeArc(50, 50, 40, -180, 0));
+            backgroundArc.setAttribute("stroke", "#E0E0E0");
+            backgroundArc.setAttribute("stroke-width", "8");
+            backgroundArc.setAttribute("fill", "none");
+            svg.appendChild(backgroundArc);
+            
+            const zones = [
+                { color: "#30B32D", start: -180, end: -120 },
+                { color: "#FFDD00", start: -120, end: -60 },
+                { color: "#F03E3E", start: -60, end: 0 },
+                { color: "#F03E3E", start: 0, end: 60 },
+                { color: "#FFDD00", start: 60, end: 120 },
+                { color: "#30B32D", start: 120, end: 180 }
+            ];
+            
+            zones.forEach(zone => {
+                const zoneArc = document.createElementNS(svgNS, "path");
+                zoneArc.setAttribute("d", describeArc(50, 50, 40, zone.start, zone.end));
+                zoneArc.setAttribute("stroke", zone.color);
+                zoneArc.setAttribute("stroke-width", "8");
+                zoneArc.setAttribute("fill", "none");
+                svg.appendChild(zoneArc);
+                    });
+            
+            const needle = document.createElementNS(svgNS, "line");
+            needle.setAttribute("x1", "50");
+            needle.setAttribute("y1", "50");
+            needle.setAttribute("x2", "50");
+            needle.setAttribute("y2", "15");
+            needle.setAttribute("stroke", "#333");
+            needle.setAttribute("stroke-width", "2");
+            needle.setAttribute("id", `${elementId}-needle`);
+            svg.appendChild(needle);
+            
+            const centerCircle = document.createElementNS(svgNS, "circle");
+            centerCircle.setAttribute("cx", "50");
+            centerCircle.setAttribute("cy", "50");
+            centerCircle.setAttribute("r", "4");
+            centerCircle.setAttribute("fill", "#333");
+            svg.appendChild(centerCircle);
+            
+            const zeroLine = document.createElementNS(svgNS, "line");
+            zeroLine.setAttribute("x1", "50");
+            zeroLine.setAttribute("y1", "50");
+            zeroLine.setAttribute("x2", "50");
+            zeroLine.setAttribute("y2", "15");
+            zeroLine.setAttribute("stroke", "#999");
+            zeroLine.setAttribute("stroke-width", "1");
+            zeroLine.setAttribute("stroke-dasharray", "2,2");
+            svg.appendChild(zeroLine);
+            
+            const minLabel = document.createElementNS(svgNS, "text");
+            minLabel.setAttribute("x", "10");
+            minLabel.setAttribute("y", "55");
+            minLabel.setAttribute("font-size", "10");
+            minLabel.setAttribute("fill", "#666");
+            minLabel.textContent = min + "°";
+            svg.appendChild(minLabel);
+            
+            const maxLabel = document.createElementNS(svgNS, "text");
+            maxLabel.setAttribute("x", "85");
+            maxLabel.setAttribute("y", "55");
+            maxLabel.setAttribute("font-size", "10");
+            maxLabel.setAttribute("fill", "#666");
+            maxLabel.textContent = max + "°";
+            svg.appendChild(maxLabel);
+            
+            container.appendChild(svg);
+            
+            return function updateGauge(value) {
+                value = Math.max(min, Math.min(max, value));
+                
+                const angle = mapRange(value, min, max, -90, 90);
+                
+                const radians = (angle - 90) * Math.PI / 180;
+                const x = 50 + 35 * Math.cos(radians);
+                const y = 50 + 35 * Math.sin(radians);
+                
+                const needle = document.getElementById(`${elementId}-needle`);
+                needle.setAttribute("x2", x);
+                needle.setAttribute("y2", y);
+            };
+        }
+        
+        const updatePitchGauge = createGauge('pitchGauge', -90, 90);
+        const updateYawGauge = createGauge('yawGauge', -90, 90);
+        const updateRollGauge = createGauge('rollGauge', -90, 90);
         
         socket.on('connect', function() {
             console.log('Connected to server');
+            
+            socket.on('mqtt_message', function(data) {
+                if (data.topic === 'pi4/pitch_yaw_roll') {
+                    try {
+                        const payload = JSON.parse(data.payload);
+                        updateGyroGauges(payload);
+                    } catch (e) {
+                        console.error('Error parsing pitch_yaw_roll data:', e);
+                    }
+                }
+            });
         });
+        
+        function updateGyroGauges(data) {
+            const pitchValue = document.getElementById('pitchValue');
+            const yawValue = document.getElementById('yawValue');
+            const rollValue = document.getElementById('rollValue');
+            const pitchYawRollRaw = document.getElementById('pitchYawRollRaw');
+            
+            if (data.pitch !== undefined) {
+                updatePitchGauge(data.pitch);
+                pitchValue.textContent = data.pitch.toFixed(1) + '°';
+            }
+            
+            if (data.yaw !== undefined) {
+                updateYawGauge(data.yaw);
+                yawValue.textContent = data.yaw.toFixed(1) + '°';
+            }
+            
+            if (data.roll !== undefined) {
+                updateRollGauge(data.roll);
+                rollValue.textContent = data.roll.toFixed(1) + '°';
+            }
+            
+            pitchYawRollRaw.textContent = JSON.stringify(data, null, 2);
+            pitchYawRollStatus.className = 'status-indicator status-connected';
+            
+            if (statusUpdates['pitch_yaw_roll']) {
+                clearTimeout(statusUpdates['pitch_yaw_roll']);
+            }
+            
+            statusUpdates['pitch_yaw_roll'] = setTimeout(() => {
+                pitchYawRollStatus.className = 'status-indicator status-disconnected';
+            }, 10000);
+        }
         
         socket.on('mqtt_update', function(data) {
             const { topic, payload } = data;
@@ -647,7 +887,6 @@
             });
         });
         
-        // Run Detection Button
         document.getElementById('runDetectionBtn').addEventListener('click', function() {
             const detectionImageEl = document.getElementById('detection-image');
             const detectionImagePlaceholder = detectionImageEl.nextElementSibling;
@@ -667,7 +906,6 @@
                 if (data.status === 'ok') {
                     statusTextEl.textContent = "Detection completed successfully";
                     
-                    // Update detection image
                     if (data.detection_image) {
                         detectionImageEl.src = 'data:image/jpeg;base64,' + data.detection_image;
                         detectionImageEl.style.display = 'block';
@@ -678,7 +916,6 @@
                         detectionImagePlaceholder.textContent = 'No detection image available';
                     }
                     
-                    // Update depth map
                     if (data.depth_image) {
                         depthImageEl.src = 'data:image/jpeg;base64,' + data.depth_image;
                         depthImageEl.style.display = 'block';
@@ -689,7 +926,6 @@
                         depthImagePlaceholder.textContent = 'No depth map available';
                     }
                     
-                    // Just output the response directly without formatting
                     detectionsEl.textContent = JSON.stringify(data, null, 2);
                 } else {
                     statusTextEl.textContent = "Error: " + (data.error || "Unknown error");
@@ -719,7 +955,6 @@
             });
         });
         
-        // Handle image loading errors
         function setupImageErrorHandling(imageId) {
             const imgEl = document.getElementById(imageId);
             if (imgEl) {
@@ -744,7 +979,6 @@
         setupImageErrorHandling('detection-image');
         setupImageErrorHandling('depth-image');
         
-        // Audio Player Controls
         document.getElementById('playAudioButton').addEventListener('click', function() {
             const audioFile = document.getElementById('audioFileSelect').value;
             const statusElement = document.getElementById('audioPlayStatus');
@@ -777,7 +1011,6 @@
             });
         });
 
-        // Volume Controls
         const volumeSlider = document.getElementById('volumeSlider');
         const volumeValue = document.getElementById('volumeValue');
 
@@ -837,7 +1070,6 @@
             });
         });
 
-        // Initialize by getting the current volume
         fetch('/get_volume')
             .then(response => response.json())
             .then(data => {
@@ -850,7 +1082,6 @@
                 console.error("Error initializing volume:", error);
             });
 
-        // Text-to-Speech Controls
         document.getElementById('speakButton').addEventListener('click', function() {
             const text = document.getElementById('ttsText').value;
             const speed = document.getElementById('ttsSpeed').value;

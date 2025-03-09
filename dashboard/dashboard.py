@@ -24,7 +24,8 @@ RPI2_TOPICS = {
 
 RPI4_TOPICS = {
     "gyro": "pi4/gyro",
-    "vibration_motor_controller": "pi4/vibration_motor_controller"
+    "vibration_motor_controller": "pi4/vibration_motor_controller",
+    "pitch_yaw_roll": "pi4/pitch_yaw_roll"
 }
 
 MESSAGE_CATEGORIES = {
@@ -33,7 +34,8 @@ MESSAGE_CATEGORIES = {
     "VIBRATION_MOTOR_RESPONSE": "Vibration Motor Response",
     "CAMERA_DETECTIONS": "Camera Detections",
     "HEADSET_GYRO": "Headset Gyro",
-    "HEADSET_VIBRATION_MOTOR_CONTROLLER": "Headset Vibration Motor Controller"
+    "HEADSET_VIBRATION_MOTOR_CONTROLLER": "Headset Vibration Motor Controller",
+    "PITCH_YAW_ROLL": "Pitch Yaw Roll"
 }
 
 VIBRATION_API_URL = "http://localhost:5000/vibrate"
@@ -49,6 +51,7 @@ DEFAULT_TTS_VOICE = "en-us"
 
 SOCKETIO_MQTT_UPDATE = 'mqtt_update'
 SOCKETIO_MQTT_CONNECTION_STATUS = 'mqtt_connection_status'
+SOCKETIO_MQTT_MESSAGE = 'mqtt_message'
 
 app = Flask(__name__, template_folder=TEMPLATE_DIR)
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -59,7 +62,8 @@ last_messages = {
     MESSAGE_CATEGORIES["VIBRATION_MOTOR_RESPONSE"]: None,
     MESSAGE_CATEGORIES["CAMERA_DETECTIONS"]: None,
     MESSAGE_CATEGORIES["HEADSET_GYRO"]: None,
-    MESSAGE_CATEGORIES["HEADSET_VIBRATION_MOTOR_CONTROLLER"]: None
+    MESSAGE_CATEGORIES["HEADSET_VIBRATION_MOTOR_CONTROLLER"]: None,
+    MESSAGE_CATEGORIES["PITCH_YAW_ROLL"]: None
 }
 
 rpi2_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
@@ -98,6 +102,10 @@ def on_rpi4_message(client, userdata, msg):
         elif topic == RPI4_TOPICS["vibration_motor_controller"]:
             last_messages[MESSAGE_CATEGORIES["HEADSET_VIBRATION_MOTOR_CONTROLLER"]] = payload
             socketio.emit(SOCKETIO_MQTT_UPDATE, {'topic': MESSAGE_CATEGORIES["HEADSET_VIBRATION_MOTOR_CONTROLLER"], 'payload': payload})
+        
+        elif topic == RPI4_TOPICS["pitch_yaw_roll"]:
+            last_messages[MESSAGE_CATEGORIES["PITCH_YAW_ROLL"]] = payload
+            socketio.emit(SOCKETIO_MQTT_MESSAGE, {'topic': topic, 'payload': msg.payload.decode()})
     
     except Exception as e:
         print(f"Error processing rpi4 message from {topic}: {e}")
@@ -147,9 +155,9 @@ def setup_mqtt():
     try:
         rpi4_client.connect(RPI4_BROKER, MQTT_PORT, MQTT_KEEPALIVE)
         
-        rpi4_client.subscribe(RPI4_TOPICS["gyro"])
-        rpi4_client.subscribe(RPI4_TOPICS["vibration_motor_controller"])
-        print(f"Subscribed to topics on {RPI4_BROKER}")
+        for topic in RPI4_TOPICS.values():
+            rpi4_client.subscribe(topic)
+            print(f"Subscribed to {topic} on {RPI4_BROKER}")
         rpi4_connected = True
     except Exception as e:
         print(f"Error connecting to {RPI4_BROKER}: {e}")
@@ -282,6 +290,14 @@ def text_to_speech():
         return jsonify({"status": "success", "message": "Speech played successfully"}), 200
     except Exception as e:
         return jsonify({"status": "error", "error": str(e)}), 500
+
+@app.route('/calibrate_headset_gyro', methods=['GET'])
+def calibrate_headset_gyro():
+    try:
+        response = requests.get(f"http://{RPI4_BROKER}:5002/calibrate")
+        return jsonify(response.json()), response.status_code
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     setup_mqtt()
