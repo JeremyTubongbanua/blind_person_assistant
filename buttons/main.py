@@ -8,8 +8,8 @@ MQTT_PORT = 1883
 MQTT_TOPIC = "pi2/button_state"
 HEALTH_CHECK_INTERVAL = 5  # seconds
 
-BUTTON_PIN_1 = 26 # left button
-BUTTON_PIN_2 = 16 # right button
+BUTTON_PIN_1 = 16 # right button
+BUTTON_PIN_2 = 26 # left button
 
 def setup_gpio():
     """
