@@ -3,36 +3,57 @@ import depthai as dai
 import numpy as np
 import time
 import json
-from flask import Flask, Response, jsonify
+from flask import Flask, Response, jsonify, request
 import threading
 
 with open('yolov8ntrained.json', 'r') as f:
     model_config = json.load(f)
 
 labels = model_config['mappings']['labels']
-confidence_threshold = 0.8
+confidence_threshold = 0.6
 
 app = Flask(__name__)
 
 def create_pipeline():
     pipeline = dai.Pipeline()
     
+    # Define sources and outputs
     camRgb = pipeline.create(dai.node.ColorCamera)
+    monoLeft = pipeline.create(dai.node.MonoCamera)
+    monoRight = pipeline.create(dai.node.MonoCamera)
+    stereo = pipeline.create(dai.node.StereoDepth)
     detectionNetwork = pipeline.create(dai.node.YoloDetectionNetwork)
+    
     xoutRgb = pipeline.create(dai.node.XLinkOut)
-    nnOut = pipeline.create(dai.node.XLinkOut)
     xinFrame = pipeline.create(dai.node.XLinkIn)
+    nnOut = pipeline.create(dai.node.XLinkOut)
+    xoutDepth = pipeline.create(dai.node.XLinkOut)
     
     xoutRgb.setStreamName("rgb")
-    nnOut.setStreamName("nn")
     xinFrame.setStreamName("frame_in")
+    nnOut.setStreamName("nn")
+    xoutDepth.setStreamName("depth")
     
+    # Properties
     camRgb.setPreviewSize(640, 640)
     camRgb.setResolution(dai.ColorCameraProperties.SensorResolution.THE_1080_P)
     camRgb.setInterleaved(False)
     camRgb.setColorOrder(dai.ColorCameraProperties.ColorOrder.BGR)
     camRgb.setFps(30)
     
+    # Mono camera properties (for depth)
+    monoLeft.setResolution(dai.MonoCameraProperties.SensorResolution.THE_400_P)
+    monoLeft.setBoardSocket(dai.CameraBoardSocket.LEFT)
+    monoRight.setResolution(dai.MonoCameraProperties.SensorResolution.THE_400_P)
+    monoRight.setBoardSocket(dai.CameraBoardSocket.RIGHT)
+    
+    # StereoDepth configuration
+    stereo.setDefaultProfilePreset(dai.node.StereoDepth.PresetMode.HIGH_DENSITY)
+    stereo.setLeftRightCheck(True)
+    stereo.setExtendedDisparity(False)
+    stereo.setSubpixel(True)
+    
+    # Object detection network configuration
     detectionNetwork.setBlobPath("yolov8ntrained_openvino_2022.1_6shave.blob")
     detectionNetwork.setConfidenceThreshold(confidence_threshold)
     detectionNetwork.setNumClasses(model_config['nn_config']['NN_specific_metadata']['classes'])
@@ -43,7 +64,12 @@ def create_pipeline():
     detectionNetwork.setNumInferenceThreads(2)
     detectionNetwork.input.setBlocking(False)
     
+    # Linking
+    monoLeft.out.link(stereo.left)
+    monoRight.out.link(stereo.right)
+    
     camRgb.preview.link(xoutRgb.input)
+    stereo.depth.link(xoutDepth.input)
     
     xinFrame.out.link(detectionNetwork.input)
     detectionNetwork.out.link(nnOut.input)
@@ -51,8 +77,10 @@ def create_pipeline():
     return pipeline
 
 latest_frame = None
+latest_depth = None
 device = None
 frame_lock = threading.Lock()
+depth_lock = threading.Lock()
 running_inference = False
 
 def frameNorm(frame, bbox):
@@ -78,8 +106,47 @@ def create_placeholder_frame(message="Connecting to camera..."):
     
     return frame
 
+def calculate_distance(depth_map, bbox):
+    """Calculate the distance to an object using the depth map and bounding box."""
+    x1, y1, x2, y2 = bbox
+    
+    # Ensure the coordinates are within the bounds of the depth map
+    x1 = max(0, min(x1, depth_map.shape[1] - 1))
+    y1 = max(0, min(y1, depth_map.shape[0] - 1))
+    x2 = max(0, min(x2, depth_map.shape[1] - 1))
+    y2 = max(0, min(y2, depth_map.shape[0] - 1))
+    
+    # Get the center of the bounding box
+    center_x, center_y = (x1 + x2) // 2, (y1 + y2) // 2
+    
+    # Define a sample size around the center point
+    sample_size = 20
+    x_start = max(center_x - sample_size//2, 0)
+    y_start = max(center_y - sample_size//2, 0)
+    x_end = min(center_x + sample_size//2, depth_map.shape[1])
+    y_end = min(center_y + sample_size//2, depth_map.shape[0])
+    
+    # Extract the depth values in the central region of the bounding box
+    if x_end > x_start and y_end > y_start:
+        depth_slice = depth_map[y_start:y_end, x_start:x_end]
+        
+        if depth_slice.size > 0:
+            # Filter out zero values (which are invalid depth measurements)
+            valid_depths = depth_slice[depth_slice > 0]
+            
+            if len(valid_depths) > 0:
+                # Calculate the median depth value (more robust than mean)
+                median_depth = np.median(valid_depths)
+                
+                # Convert to meters (depth map values are in millimeters)
+                distance_meters = median_depth / 1000.0
+                
+                return distance_meters
+    
+    return None
+
 def run_pipeline():
-    global latest_frame, device
+    global latest_frame, latest_depth, device
     consecutive_errors = 0
     max_consecutive_errors = 5
     device_in_use = False
@@ -97,6 +164,7 @@ def run_pipeline():
             device = dai.Device(pipeline)
             
             qRgb = device.getOutputQueue(name="rgb", maxSize=4, blocking=False)
+            qDepth = device.getOutputQueue(name="depth", maxSize=4, blocking=False)
             
             print("Starting video stream...")
             consecutive_errors = 0
@@ -106,7 +174,18 @@ def run_pipeline():
                     inRgb = qRgb.get()
                     frame = inRgb.getCvFrame()
                     
+                    # Flip the camera vertically
                     frame = cv2.flip(frame, 0)
+                    
+                    # Get depth frame
+                    inDepth = qDepth.tryGet()
+                    if inDepth is not None:
+                        depth_frame = inDepth.getFrame()
+                        # Keep aspect ratio and match RGB frame dimensions
+                        depth_frame = cv2.resize(depth_frame, (frame.shape[1], frame.shape[0]))
+                        
+                        with depth_lock:
+                            latest_depth = depth_frame.copy()
                     
                     with frame_lock:
                         latest_frame = frame.copy()
@@ -185,7 +264,7 @@ def video_stream():
 
 @app.route('/detections')
 def get_detections():
-    global latest_frame, device, running_inference
+    global latest_frame, latest_depth, device, running_inference
     
     if latest_frame is None:
         return jsonify({"error": "No frame available"})
@@ -209,12 +288,18 @@ def get_detections():
     
     try:
         frame_copy = None
+        depth_copy = None
+        
         with frame_lock:
             if latest_frame is not None:
                 frame_copy = latest_frame.copy()
             else:
                 running_inference = False
                 return jsonify({"error": "No frame available for detection"})
+        
+        with depth_lock:
+            if latest_depth is not None:
+                depth_copy = latest_depth.copy()
         
         # Set up dedicated inference queues
         nn_in = device.getInputQueue("frame_in")
@@ -257,8 +342,15 @@ def get_detections():
             confidence = detection.confidence
             
             if confidence >= confidence_threshold:
-                bbox = frameNorm(frame_copy, (detection.xmin, 1-detection.ymax, detection.xmax, 1-detection.ymin))
-                detections.append({
+                # Convert normalized coordinates to pixel coordinates
+                bbox = frameNorm(frame_copy, (detection.xmin, detection.ymin, detection.xmax, detection.ymax))
+                
+                # Calculate distance if depth map is available
+                distance = None
+                if depth_copy is not None:
+                    distance = calculate_distance(depth_copy, (bbox[0], bbox[1], bbox[2], bbox[3]))
+                
+                detection_data = {
                     "label": label_name,
                     "confidence": float(confidence),
                     "bbox": {
@@ -267,7 +359,13 @@ def get_detections():
                         "x2": int(bbox[2]),
                         "y2": int(bbox[3])
                     }
-                })
+                }
+                
+                # Add distance information if available
+                if distance is not None:
+                    detection_data["distance"] = round(float(distance), 2)
+                
+                detections.append(detection_data)
         
         class_counts = {}
         for detection in detections:
@@ -315,7 +413,7 @@ def index():
         </style>
     </head>
     <body>
-        <h1>Oak-D Lite Camera Stream</h1>
+        <h1>Oak-D Lite Camera Stream with Depth Detection</h1>
         <div id="statusMessage" class="status"></div>
         <div class="video-container">
             <img id="videoStream" class="stream" src="/video_stream" alt="Video Stream" onload="updateCanvasSize()">
@@ -343,7 +441,7 @@ def index():
             
             window.addEventListener('resize', updateCanvasSize);
             
-            function drawBoundingBox(bbox, label, confidence) {
+            function drawBoundingBox(bbox, label, confidence, distance) {
                 const x = bbox.x1;
                 const y = bbox.y1;
                 const width = bbox.x2 - bbox.x1;
@@ -357,16 +455,25 @@ def index():
                 const scaledWidth = width * scaleX;
                 const scaledHeight = height * scaleY;
                 
+                // Draw the rectangle
                 ctx.strokeStyle = '#00FF00';
                 ctx.lineWidth = 2;
                 ctx.strokeRect(scaledX, scaledY, scaledWidth, scaledHeight);
                 
+                // Prepare the label text with distance if available
+                let labelText = `${label} (${(confidence * 100).toFixed(0)}%)`;
+                if (distance !== undefined) {
+                    labelText += ` - ${distance}m`;
+                }
+                
+                // Draw background for text at the top of the bounding box
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
                 ctx.fillRect(scaledX, scaledY - 20, scaledWidth, 20);
                 
+                // Draw text
                 ctx.fillStyle = '#FFFFFF';
                 ctx.font = '12px Arial';
-                ctx.fillText(`${label} (${(confidence * 100).toFixed(0)}%)`, scaledX + 5, scaledY - 5);
+                ctx.fillText(labelText, scaledX + 5, scaledY - 5);
             }
             
             document.getElementById('detectBtn').addEventListener('click', function() {
@@ -389,7 +496,7 @@ def index():
                             statusMessage.className = "status error";
                         } else if (data.detections && data.detections.length > 0) {
                             data.detections.forEach(detection => {
-                                drawBoundingBox(detection.bbox, detection.label, detection.confidence);
+                                drawBoundingBox(detection.bbox, detection.label, detection.confidence, detection.distance);
                             });
                             statusMessage.textContent = `Detection complete. Found ${data.detections.length} objects.`;
                             statusMessage.className = "status success";
