@@ -141,6 +141,21 @@ def reset_calibration():
         "message": "Calibration complete."
     })
 
+@app.route('/zero', methods=['GET'])
+def zero_orientation():
+    global gyro_integrated, first_message, last_timestamp
+    
+    print("Zeroing pitch, yaw, and roll...")
+    # Reset integrated values but keep calibration
+    gyro_integrated = {"roll": 0, "pitch": 0, "yaw": 0}
+    first_message = True
+    last_timestamp = 0
+    
+    return jsonify({
+        "status": "success",
+        "message": "Orientation zeroed successfully."
+    })
+
 def run_flask():
     app.run(host='0.0.0.0', port=HTTP_PORT)
 
