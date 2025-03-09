@@ -47,6 +47,10 @@ def on_message(client, userdata, msg):
         gyro_y = data.get("gyro", {}).get("y", 0)
         gyro_z = data.get("gyro", {}).get("z", 0)
         
+        temp_y = gyro_y
+        gyro_y = gyro_z
+        gyro_z = -temp_y
+                
         current_timestamp = data.get("timestamp", 0)
         
         if is_calibrating and calibration_samples < CALIBRATION_SAMPLES_NEEDED:
