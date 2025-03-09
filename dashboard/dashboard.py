@@ -40,12 +40,15 @@ MESSAGE_CATEGORIES = {
 }
 
 VIBRATION_API_URL = "http://localhost:5000/vibrate"
-DETECTION_API_URL = "http://192.168.2.220:8005/detections"
+DETECTION_API_URL = "http://localhost:8005/detections"
 AUDIO_API_BASE_URL = "http://localhost:5001"
 PLAY_AUDIO_ENDPOINT = f"{AUDIO_API_BASE_URL}/play_file"
 SET_VOLUME_ENDPOINT = f"{AUDIO_API_BASE_URL}/set_volume"
 GET_VOLUME_ENDPOINT = f"{AUDIO_API_BASE_URL}/get_volume"
 TTS_ENDPOINT = f"{AUDIO_API_BASE_URL}/tts"
+HEADSET_CALIBRATION_ENDPOINT = f"http://{RPI4_BROKER}:5002/calibrate"
+CANE_CALIBRATION_ENDPOINT = f"http://{RPI2_BROKER}:5002/calibrate"
+MQTT_API_URL = "http://localhost:8080/mqtt_service"
 
 DEFAULT_TTS_SPEED = 125
 DEFAULT_TTS_VOICE = "en-us"
@@ -299,7 +302,7 @@ def text_to_speech():
 @app.route('/calibrate_headset_gyro', methods=['GET'])
 def calibrate_headset_gyro():
     try:
-        response = requests.get(f"http://{RPI4_BROKER}:5002/calibrate")
+        response = requests.get(HEADSET_CALIBRATION_ENDPOINT)
         return jsonify(response.json()), response.status_code
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -307,7 +310,7 @@ def calibrate_headset_gyro():
 @app.route('/calibrate_cane_gyro', methods=['GET'])
 def calibrate_cane_gyro():
     try:
-        response = requests.get(f"http://{RPI2_BROKER}:5002/calibrate")
+        response = requests.get(CANE_CALIBRATION_ENDPOINT)
         return jsonify(response.json()), response.status_code
     except Exception as e:
         return jsonify({"error": str(e)}), 500

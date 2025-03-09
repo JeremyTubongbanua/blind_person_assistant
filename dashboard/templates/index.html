@@ -367,7 +367,6 @@
     </div>
     
     <div class="dashboard">
-        <!-- Camera Section -->
         <div class="section">
             <div class="section-title">Camera</div>
             <div class="camera-grid">
@@ -414,11 +413,9 @@
             </div>
         </div>
 
-        <!-- Pitch Yaw Roll Section -->
         <div class="section">
             <div class="section-title">Pitch Yaw Roll</div>
             
-            <!-- Headset Orientation -->
             <div class="orientation-section">
                 <div class="data-card">
                     <div class="card-title">
@@ -449,7 +446,6 @@
                 </div>
             </div>
             
-            <!-- Cane Orientation -->
             <div class="orientation-section">
                 <div class="data-card">
                     <div class="card-title">
@@ -507,7 +503,6 @@
             </div>
         </div>
         
-        <!-- Vibration Motor Section -->
         <div class="section">
             <div class="section-title">Vibration Motors</div>
             <div class="flex-column">
@@ -550,7 +545,6 @@
             </div>
         </div>
 
-        <!-- Button Section -->
         <div class="section">
             <div class="section-title">Buttons</div>
             <div class="data-card">
@@ -563,11 +557,9 @@
             </div>
         </div>
 
-        <!-- Speaker Section -->
         <div class="section">
             <div class="section-title">Speaker</div>
             
-            <!-- Audio File Player -->
             <div class="data-card">
                 <div class="card-title">Play Audio File</div>
                 <div class="controls">
@@ -581,7 +573,6 @@
                 </div>
             </div>
             
-            <!-- Volume Control -->
             <div class="data-card">
                 <div class="card-title">Volume Control</div>
                 <div class="controls">
@@ -595,7 +586,6 @@
                 </div>
             </div>
             
-            <!-- Text-to-Speech -->
             <div class="data-card">
                 <div class="card-title">Text-to-Speech</div>
                 <div class="tts-controls">
@@ -1208,7 +1198,6 @@
             });
         });
         
-        // Add event listeners for calibrate buttons
         document.getElementById('calibrateButton').addEventListener('click', function() {
             const statusArea = document.getElementById('headsetCalibrationStatus');
             statusArea.textContent = "Calibrating headset gyro... please wait";
