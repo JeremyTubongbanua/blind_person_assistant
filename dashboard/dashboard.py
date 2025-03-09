@@ -7,12 +7,14 @@ import requests
 from flask_socketio import SocketIO
 import os
 
-app = Flask(__name__, template_folder=os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates'))
-socketio = SocketIO(app, cors_allowed_origins="*")
-
+TEMPLATE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates')
+FLASK_HOST = '0.0.0.0'
+FLASK_PORT = 8080
+FLASK_DEBUG = False
 RPI2_BROKER = "192.168.2.219"
 RPI4_BROKER = "192.168.2.220"
 MQTT_PORT = 1883
+MQTT_KEEPALIVE = 60
 
 RPI2_TOPICS = {
     "button_state": "pi2/button_state",
@@ -25,13 +27,39 @@ RPI4_TOPICS = {
     "vibration_motor_controller": "pi4/vibration_motor_controller"
 }
 
+MESSAGE_CATEGORIES = {
+    "CANE_BUTTON_STATE": "Cane Button State",
+    "GYRO": "Gyro",
+    "VIBRATION_MOTOR_RESPONSE": "Vibration Motor Response",
+    "CAMERA_DETECTIONS": "Camera Detections",
+    "HEADSET_GYRO": "Headset Gyro",
+    "HEADSET_VIBRATION_MOTOR_CONTROLLER": "Headset Vibration Motor Controller"
+}
+
+VIBRATION_API_URL = "http://localhost:5000/vibrate"
+DETECTION_API_URL = "http://192.168.2.220:8005/detections"
+AUDIO_API_BASE_URL = "http://localhost:5001"
+PLAY_AUDIO_ENDPOINT = f"{AUDIO_API_BASE_URL}/play_file"
+SET_VOLUME_ENDPOINT = f"{AUDIO_API_BASE_URL}/set_volume"
+GET_VOLUME_ENDPOINT = f"{AUDIO_API_BASE_URL}/get_volume"
+TTS_ENDPOINT = f"{AUDIO_API_BASE_URL}/tts"
+
+DEFAULT_TTS_SPEED = 125
+DEFAULT_TTS_VOICE = "en-us"
+
+SOCKETIO_MQTT_UPDATE = 'mqtt_update'
+SOCKETIO_MQTT_CONNECTION_STATUS = 'mqtt_connection_status'
+
+app = Flask(__name__, template_folder=TEMPLATE_DIR)
+socketio = SocketIO(app, cors_allowed_origins="*")
+
 last_messages = {
-    "Cane Button State": None,
-    "Gyro": None,
-    "Vibration Motor Response": None,
-    "Camera Detections": None,
-    "Headset Gyro": None,
-    "Headset Vibration Motor Controller": None
+    MESSAGE_CATEGORIES["CANE_BUTTON_STATE"]: None,
+    MESSAGE_CATEGORIES["GYRO"]: None,
+    MESSAGE_CATEGORIES["VIBRATION_MOTOR_RESPONSE"]: None,
+    MESSAGE_CATEGORIES["CAMERA_DETECTIONS"]: None,
+    MESSAGE_CATEGORIES["HEADSET_GYRO"]: None,
+    MESSAGE_CATEGORIES["HEADSET_VIBRATION_MOTOR_CONTROLLER"]: None
 }
 
 rpi2_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
@@ -44,16 +72,16 @@ def on_rpi2_message(client, userdata, msg):
         payload = json.loads(msg.payload.decode())
         
         if topic == RPI2_TOPICS["button_state"]:
-            last_messages["Cane Button State"] = payload
-            socketio.emit('mqtt_update', {'topic': 'Cane Button State', 'payload': payload})
+            last_messages[MESSAGE_CATEGORIES["CANE_BUTTON_STATE"]] = payload
+            socketio.emit(SOCKETIO_MQTT_UPDATE, {'topic': MESSAGE_CATEGORIES["CANE_BUTTON_STATE"], 'payload': payload})
         
         elif topic == RPI2_TOPICS["gyro"]:
-            last_messages["Gyro"] = payload
-            socketio.emit('mqtt_update', {'topic': 'Gyro', 'payload': payload})
+            last_messages[MESSAGE_CATEGORIES["GYRO"]] = payload
+            socketio.emit(SOCKETIO_MQTT_UPDATE, {'topic': MESSAGE_CATEGORIES["GYRO"], 'payload': payload})
         
         elif topic == RPI2_TOPICS["vibration_motor_response"]:
-            last_messages["Vibration Motor Response"] = payload
-            socketio.emit('mqtt_update', {'topic': 'Vibration Motor Response', 'payload': payload})
+            last_messages[MESSAGE_CATEGORIES["VIBRATION_MOTOR_RESPONSE"]] = payload
+            socketio.emit(SOCKETIO_MQTT_UPDATE, {'topic': MESSAGE_CATEGORIES["VIBRATION_MOTOR_RESPONSE"], 'payload': payload})
     
     except Exception as e:
         print(f"Error processing rpi2 message from {topic}: {e}")
@@ -64,12 +92,12 @@ def on_rpi4_message(client, userdata, msg):
         payload = json.loads(msg.payload.decode())
         
         if topic == RPI4_TOPICS["gyro"]:
-            last_messages["Headset Gyro"] = payload
-            socketio.emit('mqtt_update', {'topic': 'Headset Gyro', 'payload': payload})
+            last_messages[MESSAGE_CATEGORIES["HEADSET_GYRO"]] = payload
+            socketio.emit(SOCKETIO_MQTT_UPDATE, {'topic': MESSAGE_CATEGORIES["HEADSET_GYRO"], 'payload': payload})
         
         elif topic == RPI4_TOPICS["vibration_motor_controller"]:
-            last_messages["Headset Vibration Motor Controller"] = payload
-            socketio.emit('mqtt_update', {'topic': 'Headset Vibration Motor Controller', 'payload': payload})
+            last_messages[MESSAGE_CATEGORIES["HEADSET_VIBRATION_MOTOR_CONTROLLER"]] = payload
+            socketio.emit(SOCKETIO_MQTT_UPDATE, {'topic': MESSAGE_CATEGORIES["HEADSET_VIBRATION_MOTOR_CONTROLLER"], 'payload': payload})
     
     except Exception as e:
         print(f"Error processing rpi4 message from {topic}: {e}")
@@ -100,12 +128,12 @@ def setup_mqtt():
     
     stop_mqtt_clients()
     
-    socketio.emit('mqtt_connection_status', {'status': 'connecting'})
+    socketio.emit(SOCKETIO_MQTT_CONNECTION_STATUS, {'status': 'connecting'})
     
     rpi2_client.on_message = on_rpi2_message
     rpi2_connected = False
     try:
-        rpi2_client.connect(RPI2_BROKER, MQTT_PORT, 60)
+        rpi2_client.connect(RPI2_BROKER, MQTT_PORT, MQTT_KEEPALIVE)
         
         for topic in RPI2_TOPICS.values():
             rpi2_client.subscribe(topic)
@@ -117,7 +145,7 @@ def setup_mqtt():
     rpi4_client.on_message = on_rpi4_message
     rpi4_connected = False
     try:
-        rpi4_client.connect(RPI4_BROKER, MQTT_PORT, 60)
+        rpi4_client.connect(RPI4_BROKER, MQTT_PORT, MQTT_KEEPALIVE)
         
         rpi4_client.subscribe(RPI4_TOPICS["gyro"])
         rpi4_client.subscribe(RPI4_TOPICS["vibration_motor_controller"])
@@ -141,7 +169,7 @@ def setup_mqtt():
         'rpi4_connected': rpi4_connected,
         'status': 'connected' if (rpi2_connected or rpi4_connected) else 'failed'
     }
-    socketio.emit('mqtt_connection_status', connection_status)
+    socketio.emit(SOCKETIO_MQTT_CONNECTION_STATUS, connection_status)
     
     return connection_status
 
@@ -150,14 +178,14 @@ def rpi2_client_loop():
         rpi2_client.loop_forever()
     except Exception as e:
         print(f"RPI2 MQTT loop error: {e}")
-        socketio.emit('mqtt_connection_status', {'rpi2_connected': False})
+        socketio.emit(SOCKETIO_MQTT_CONNECTION_STATUS, {'rpi2_connected': False})
 
 def rpi4_client_loop():
     try:
         rpi4_client.loop_forever()
     except Exception as e:
         print(f"RPI4 MQTT loop error: {e}")
-        socketio.emit('mqtt_connection_status', {'rpi4_connected': False})
+        socketio.emit(SOCKETIO_MQTT_CONNECTION_STATUS, {'rpi4_connected': False})
 
 @app.route('/')
 def index():
@@ -168,7 +196,7 @@ def vibrate():
     try:
         data = request.get_json()
         response = requests.post(
-            "http://localhost:5000/vibrate",
+            VIBRATION_API_URL,
             headers={"Content-Type": "application/json"},
             json=data
         )
@@ -179,13 +207,12 @@ def vibrate():
 @app.route('/run_detection', methods=['GET'])
 def run_detection():
     try:
-        response = requests.get("http://192.168.2.220:8005/detections")
+        response = requests.get(DETECTION_API_URL)
         detection_data = response.json()
         
-        # If the request was successful, save to local cache
         if 'status' in detection_data and detection_data['status'] == 'ok':
-            last_messages["Camera Detections"] = detection_data
-            socketio.emit('mqtt_update', {'topic': 'Camera Detections', 'payload': detection_data})
+            last_messages[MESSAGE_CATEGORIES["CAMERA_DETECTIONS"]] = detection_data
+            socketio.emit(SOCKETIO_MQTT_UPDATE, {'topic': MESSAGE_CATEGORIES["CAMERA_DETECTIONS"], 'payload': detection_data})
         
         return jsonify(detection_data), 200
     except Exception as e:
@@ -213,7 +240,7 @@ def play_audio():
         file_name = data.get('file')
         
         response = requests.get(
-            f"http://localhost:5001/play_file?file={file_name}"
+            f"{PLAY_AUDIO_ENDPOINT}?file={file_name}"
         )
         return jsonify({"status": "success", "message": f"Playing {file_name}"}), 200
     except Exception as e:
@@ -226,7 +253,7 @@ def set_volume():
         volume = data.get('volume')
         
         response = requests.get(
-            f"http://localhost:5001/set_volume?volume={volume}"
+            f"{SET_VOLUME_ENDPOINT}?volume={volume}"
         )
         return jsonify({"status": "success", "message": f"Volume set to {volume}%"}), 200
     except Exception as e:
@@ -235,7 +262,7 @@ def set_volume():
 @app.route('/get_volume', methods=['GET'])
 def get_volume():
     try:
-        response = requests.get("http://localhost:5001/get_volume")
+        response = requests.get(GET_VOLUME_ENDPOINT)
         volume_data = response.json()
         return jsonify(volume_data), 200
     except Exception as e:
@@ -246,11 +273,11 @@ def text_to_speech():
     try:
         data = request.get_json()
         text = data.get('text')
-        speed = data.get('speed', 125)
-        voice_name = data.get('voice_name', 'en-us')
+        speed = data.get('speed', DEFAULT_TTS_SPEED)
+        voice_name = data.get('voice_name', DEFAULT_TTS_VOICE)
         
         response = requests.get(
-            f"http://localhost:5001/tts?text={text}&speed={speed}&voice_name={voice_name}"
+            f"{TTS_ENDPOINT}?text={text}&speed={speed}&voice_name={voice_name}"
         )
         return jsonify({"status": "success", "message": "Speech played successfully"}), 200
     except Exception as e:
@@ -258,4 +285,4 @@ def text_to_speech():
 
 if __name__ == '__main__':
     setup_mqtt()
-    socketio.run(app, host='0.0.0.0', port=8080, debug=False, allow_unsafe_werkzeug=True)
+    socketio.run(app, host=FLASK_HOST, port=FLASK_PORT, debug=FLASK_DEBUG, allow_unsafe_werkzeug=True)
