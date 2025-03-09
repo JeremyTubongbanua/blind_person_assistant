@@ -113,6 +113,11 @@ class mpu6050:
         x = x / gyro_scale_modifier
         y = y / gyro_scale_modifier
         z = z / gyro_scale_modifier
+        
+        temp_y = y
+        y = z
+        z = -temp_y
+        
 
         return {'x': x, 'y': y, 'z': z}
 

@@ -1,0 +1,258 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gyroscope Dashboard</title>
+    <!-- jQuery -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .dashboard {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-around;
+            gap: 20px;
+        }
+        .gauge-container {
+            background-color: white;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            width: 280px;
+        }
+        .gauge-container h2 {
+            margin-top: 0;
+            color: #333;
+        }
+        .gauge {
+            width: 240px;
+            height: 180px;
+            display: inline-block;
+            margin-bottom: 10px;
+            position: relative;
+        }
+        .value-display {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 10px 0;
+            color: #2c3e50;
+        }
+        .timestamp {
+            font-size: 14px;
+            color: #7f8c8d;
+            margin-top: 20px;
+        }
+        .svg-gauge {
+            width: 100%;
+            height: 100%;
+        }
+        .gauge-value {
+            font-size: 14px;
+            font-weight: bold;
+            fill: #333;
+        }
+        .gauge-min, .gauge-max {
+            font-size: 12px;
+            fill: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Gyroscope Dashboard</h1>
+            <p>Real-time data from MQTT broker</p>
+        </div>
+        
+        <div class="dashboard">
+            <div class="gauge-container">
+                <h2>Roll</h2>
+                <div class="gauge" id="gauge-roll"></div>
+                <div class="value-display" id="value-roll">0°</div>
+            </div>
+            
+            <div class="gauge-container">
+                <h2>Pitch</h2>
+                <div class="gauge" id="gauge-pitch"></div>
+                <div class="value-display" id="value-pitch">0°</div>
+            </div>
+            
+            <div class="gauge-container">
+                <h2>Yaw</h2>
+                <div class="gauge" id="gauge-yaw"></div>
+                <div class="value-display" id="value-yaw">0°</div>
+            </div>
+        </div>
+        
+        <div class="timestamp" id="timestamp">Last update: --</div>
+    </div>
+
+    <script>
+        // SVG Gauge creation function
+        function createGauge(elementId, min, max) {
+            const container = document.getElementById(elementId);
+            
+            // Create SVG element
+            const svgNS = "http://www.w3.org/2000/svg";
+            const svg = document.createElementNS(svgNS, "svg");
+            svg.setAttribute("class", "svg-gauge");
+            svg.setAttribute("viewBox", "0 0 100 100");
+            
+            // Create gauge background
+            const backgroundArc = document.createElementNS(svgNS, "path");
+            backgroundArc.setAttribute("d", describeArc(50, 50, 40, -180, 0));
+            backgroundArc.setAttribute("stroke", "#E0E0E0");
+            backgroundArc.setAttribute("stroke-width", "8");
+            backgroundArc.setAttribute("fill", "none");
+            svg.appendChild(backgroundArc);
+            
+            // Create color zones
+            const zones = [
+                { color: "#30B32D", start: -180, end: -120 }, // green
+                { color: "#FFDD00", start: -120, end: -60 },  // yellow
+                { color: "#F03E3E", start: -60, end: 0 },     // red
+                { color: "#F03E3E", start: 0, end: 60 },      // red
+                { color: "#FFDD00", start: 60, end: 120 },    // yellow
+                { color: "#30B32D", start: 120, end: 180 }    // green
+            ];
+            
+            zones.forEach(zone => {
+                const zoneArc = document.createElementNS(svgNS, "path");
+                zoneArc.setAttribute("d", describeArc(50, 50, 40, zone.start, zone.end));
+                zoneArc.setAttribute("stroke", zone.color);
+                zoneArc.setAttribute("stroke-width", "8");
+                zoneArc.setAttribute("fill", "none");
+                svg.appendChild(zoneArc);
+            });
+            
+            // Create gauge needle
+            const needle = document.createElementNS(svgNS, "line");
+            needle.setAttribute("x1", "50");
+            needle.setAttribute("y1", "50");
+            needle.setAttribute("x2", "50");
+            needle.setAttribute("y2", "15");
+            needle.setAttribute("stroke", "#333");
+            needle.setAttribute("stroke-width", "2");
+            needle.setAttribute("id", `${elementId}-needle`);
+            svg.appendChild(needle);
+            
+            // Create center circle
+            const centerCircle = document.createElementNS(svgNS, "circle");
+            centerCircle.setAttribute("cx", "50");
+            centerCircle.setAttribute("cy", "50");
+            centerCircle.setAttribute("r", "4");
+            centerCircle.setAttribute("fill", "#333");
+            svg.appendChild(centerCircle);
+            
+            // Add min and max labels
+            const minLabel = document.createElementNS(svgNS, "text");
+            minLabel.setAttribute("x", "10");
+            minLabel.setAttribute("y", "55");
+            minLabel.setAttribute("class", "gauge-min");
+            minLabel.textContent = min + "°";
+            svg.appendChild(minLabel);
+            
+            const maxLabel = document.createElementNS(svgNS, "text");
+            maxLabel.setAttribute("x", "85");
+            maxLabel.setAttribute("y", "55");
+            maxLabel.setAttribute("class", "gauge-max");
+            maxLabel.textContent = max + "°";
+            svg.appendChild(maxLabel);
+            
+            // Add gauge to DOM
+            container.appendChild(svg);
+            
+            // Return update function
+            return function updateGauge(value) {
+                // Clamp value to min/max range
+                value = Math.max(min, Math.min(max, value));
+                
+                // Map value to angle (180 degree range from -90 to 90)
+                const angle = mapRange(value, min, max, -90, 90);
+                
+                // Calculate needle endpoint
+                const radians = (angle - 90) * Math.PI / 180;
+                const x = 50 + 35 * Math.cos(radians);
+                const y = 50 + 35 * Math.sin(radians);
+                
+                // Update needle position
+                const needle = document.getElementById(`${elementId}-needle`);
+                needle.setAttribute("x2", x);
+                needle.setAttribute("y2", y);
+            };
+        }
+        
+        // Helper function to describe an arc path
+        function describeArc(x, y, radius, startAngle, endAngle) {
+            const start = polarToCartesian(x, y, radius, endAngle);
+            const end = polarToCartesian(x, y, radius, startAngle);
+            const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
+            
+            return [
+                "M", start.x, start.y, 
+                "A", radius, radius, 0, largeArcFlag, 0, end.x, end.y
+            ].join(" ");
+        }
+        
+        // Helper function to convert polar to cartesian coordinates
+        function polarToCartesian(centerX, centerY, radius, angleInDegrees) {
+            const angleInRadians = (angleInDegrees - 90) * Math.PI / 180.0;
+            return {
+                x: centerX + (radius * Math.cos(angleInRadians)),
+                y: centerY + (radius * Math.sin(angleInRadians))
+            };
+        }
+        
+        // Helper function to map a value from one range to another
+        function mapRange(value, inMin, inMax, outMin, outMax) {
+            return (value - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
+        }
+        
+        // Initialize gauges
+        const updateRoll = createGauge("gauge-roll", -180, 180);
+        const updatePitch = createGauge("gauge-pitch", -180, 180);
+        const updateYaw = createGauge("gauge-yaw", -180, 180);
+
+        // Function to fetch data and update gauges
+        function updateData() {
+            $.getJSON('/gyro_data', function(data) {
+                // Update gauges
+                updateRoll(data.roll);
+                updatePitch(data.pitch);
+                updateYaw(data.yaw);
+                
+                // Update text displays
+                $('#value-roll').text(data.roll.toFixed(2) + '°');
+                $('#value-pitch').text(data.pitch.toFixed(2) + '°');
+                $('#value-yaw').text(data.yaw.toFixed(2) + '°');
+                
+                // Update timestamp
+                const date = new Date(data.timestamp * 1000);
+                $('#timestamp').text('Last update: ' + date.toLocaleTimeString());
+            }).fail(function() {
+                console.log("Error fetching data from API");
+            });
+        }
+
+        // Update data initially and then every 100ms
+        updateData();
+        setInterval(updateData, 100);
+    </script>
+</body>
+</html>
