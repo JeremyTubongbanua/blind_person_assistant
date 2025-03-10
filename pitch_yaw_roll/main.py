@@ -50,9 +50,9 @@ def on_message(client, userdata, msg):
         gyro_y = data.get("gyro", {}).get("y", 0)
         gyro_z = data.get("gyro", {}).get("z", 0)
         
-        temp_y = gyro_y
-        gyro_y = gyro_z
-        gyro_z = -temp_y
+        # temp_y = gyro_y
+        gyro_y = -gyro_y
+        # gyro_z = -gyro_z
                 
         current_timestamp = data.get("timestamp", 0)
         
@@ -106,9 +106,9 @@ def on_message(client, userdata, msg):
         
         last_timestamp = current_timestamp
         
-        roll = max(min(gyro_integrated["roll"], 180), -180) + 90
+        roll = max(min(gyro_integrated["roll"], 180), -180) + 270
         pitch = max(min(gyro_integrated["pitch"], 180), -180)
-        yaw = -max(min(gyro_integrated["yaw"], 180), -180)
+        yaw = max(min(gyro_integrated["yaw"], 180), -180)
         
         output_data = {
             "pitch": round(pitch, 2),
@@ -142,6 +142,21 @@ def reset_calibration():
     return jsonify({
         "status": "success",
         "message": "Calibration complete."
+    })
+
+@app.route('/zero', methods=['GET'])
+def zero_orientation():
+    global gyro_integrated, first_message, last_timestamp
+    
+    print("Zeroing pitch, yaw, and roll...")
+    # Reset integrated values but keep calibration
+    gyro_integrated = {"roll": 0, "pitch": 0, "yaw": 0}
+    first_message = True
+    last_timestamp = 0
+    
+    return jsonify({
+        "status": "success",
+        "message": "Orientation zeroed successfully."
     })
 
 def run_flask():
