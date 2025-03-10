@@ -47,7 +47,9 @@ SET_VOLUME_ENDPOINT = f"{AUDIO_API_BASE_URL}/set_volume"
 GET_VOLUME_ENDPOINT = f"{AUDIO_API_BASE_URL}/get_volume"
 TTS_ENDPOINT = f"{AUDIO_API_BASE_URL}/tts"
 HEADSET_CALIBRATION_ENDPOINT = f"http://{RPI4_BROKER}:5002/calibrate"
+HEADSET_ZERO_ENDPOINT = f"http://{RPI4_BROKER}:5002/zero"
 CANE_CALIBRATION_ENDPOINT = f"http://{RPI2_BROKER}:5002/calibrate"
+CANE_ZERO_ENDPOINT = f"http://{RPI2_BROKER}:5002/zero"
 MQTT_API_URL = "http://localhost:8080/mqtt_service"
 
 DEFAULT_TTS_SPEED = 125
@@ -307,10 +309,26 @@ def calibrate_headset_gyro():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
+@app.route('/zero_headset_gyro', methods=['GET'])
+def zero_headset_gyro():
+    try:
+        response = requests.get(f"{HEADSET_ZERO_ENDPOINT}")
+        return jsonify(response.json()), response.status_code
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
 @app.route('/calibrate_cane_gyro', methods=['GET'])
 def calibrate_cane_gyro():
     try:
         response = requests.get(CANE_CALIBRATION_ENDPOINT)
+        return jsonify(response.json()), response.status_code
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+@app.route('/zero_cane_gyro', methods=['GET'])
+def zero_cane_gyro():
+    try:
+        response = requests.get(f"{CANE_ZERO_ENDPOINT}")
         return jsonify(response.json()), response.status_code
     except Exception as e:
         return jsonify({"error": str(e)}), 500

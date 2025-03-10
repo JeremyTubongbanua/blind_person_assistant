@@ -442,6 +442,7 @@
                     </div>
                     <pre id="pitchYawRollRaw" style="margin-top: 20px; max-height: 100px;">Awaiting data...</pre>
                     <button id="calibrateButton" class="detection-btn">Calibrate</button>
+                    <button id="zeroButton" class="detection-btn">Zero</button>
                     <div id="headsetCalibrationStatus" class="calibration-status"></div>
                 </div>
             </div>
@@ -472,6 +473,7 @@
                     </div>
                     <pre id="canePitchYawRollRaw" style="margin-top: 20px; max-height: 100px;">Awaiting data...</pre>
                     <button id="caneCalibrateButton" class="detection-btn">Calibrate</button>
+                    <button id="caneZeroButton" class="detection-btn">Zero</button>
                     <div id="caneCalibrationStatus" class="calibration-status"></div>
                 </div>
             </div>
@@ -1213,6 +1215,22 @@
                 statusArea.textContent = "Calibration failed: " + error.message;
             });
         });
+
+        document.getElementById('zeroButton').addEventListener('click', function() {
+            const statusArea = document.getElementById('headsetCalibrationStatus');
+            statusArea.textContent = "Zeroing headset gyro... please wait";
+            
+            fetch('/zero_headset_gyro', {
+                method: 'GET'
+            })
+            .then(response => response.json())
+            .then(data => {
+                statusArea.textContent = "Zeroing complete!\nResponse: " + JSON.stringify(data, null, 2);
+            })
+            .catch(error => {
+                statusArea.textContent = "Zeroing failed: " + error.message;
+            });
+        });
         
         document.getElementById('caneCalibrateButton').addEventListener('click', function() {
             const statusArea = document.getElementById('caneCalibrationStatus');
@@ -1227,6 +1245,22 @@
             })
             .catch(error => {
                 statusArea.textContent = "Calibration failed: " + error.message;
+            });
+        });
+
+        document.getElementById('caneZeroButton').addEventListener('click', function() {
+            const statusArea = document.getElementById('caneCalibrationStatus');
+            statusArea.textContent = "Zeroing cane gyro... please wait";
+            
+            fetch('/zero_cane_gyro', {
+                method: 'GET'
+            })
+            .then(response => response.json())
+            .then(data => {
+                statusArea.textContent = "Zeroing complete!\nResponse: " + JSON.stringify(data, null, 2);
+            })
+            .catch(error => {
+                statusArea.textContent = "Zeroing failed: " + error.message;
             });
         });
     </script>
