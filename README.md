@@ -1,6 +1,6 @@
 # rpi4
 
-- camera-stream.service `journalctl -u camera-stream.service -f` (192.168.2.220:1883 pi4/detections) (http://192.168.2.220:8005/video_stream)
+- camera-stream.service `journalctl -u camera-stream.service -f` (192.168.2.220:1883 pi4/detections, pi4/depth_map, pi4/detection_image) (http://192.168.2.220:8005/video_stream)
 - gyro-mqtt.service `journalctl -u gyro-mqtt.service` (192.168.2.220:1883 pi4/gyro)
 - vibration-motor-controller.service `journalctl -u vibration-motor-controller.service` (192.168.2.220:5000/vibrate)  (192.168.2.220:1883 pi4/vibration_motor_controller)
 - dashboard.service ([192.168.2.220:8080](http://192.168.2.220:8080/))

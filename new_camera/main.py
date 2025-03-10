@@ -6,6 +6,14 @@ import json
 import base64
 from flask import Flask, Response, jsonify, request
 import threading
+import uuid as uuid4
+import paho.mqtt.client as mqtt
+
+MQTT_HOST = '0.0.0.0'
+MQTT_PORT = 1883
+MQTT_TOPIC_DETECTIONS = 'pi4/detections'
+MQTT_TOPIC_DEPTH_MAP = 'pi4/depth_map'
+MQTT_TOPIC_DETECTION_IMAGE = 'pi4/detection_image'
 
 with open('yolov8ntrained.json', 'r') as f:
     model_config = json.load(f)
@@ -14,6 +22,15 @@ labels = model_config['mappings']['labels']
 confidence_threshold = 0.6
 
 app = Flask(__name__)
+
+mqtt_client = mqtt.Client()
+mqtt_client.connect(MQTT_HOST, MQTT_PORT, 60)
+def start_mqtt_loop():
+    mqtt_client.loop_forever()
+
+
+def publish_message(topic, message):
+    mqtt_client.publish(topic, message)
 
 def create_pipeline():
     pipeline = dai.Pipeline()
@@ -391,7 +408,7 @@ def get_detections():
                 detections.append(detection_data)
         
         detection_image = None
-        depth_image = None
+        depth_map = None
         
         if frame_copy is not None:
             detection_image = draw_detections(frame_copy, detections)
@@ -400,10 +417,10 @@ def get_detections():
             detection_image_b64 = None
             
         if depth_copy is not None:
-            depth_image = visualize_depth(depth_copy)
-            depth_image_b64 = frame_to_base64(depth_image)
+            depth_map = visualize_depth(depth_copy)
+            depth_map_b64 = frame_to_base64(depth_map)
         else:
-            depth_image_b64 = None
+            depth_map_b64 = None
         
         class_counts = {}
         for detection in detections:
@@ -414,13 +431,36 @@ def get_detections():
                 class_counts[label] = 1
         
         running_inference = False
-        return jsonify({
+        
+        unique_id = uuid4.uuid4()
+        publish_message(MQTT_TOPIC_DETECTIONS, json.dumps({
             "timestamp": time.time(),
-            "detected_classes": class_counts,
+            "id": str(unique_id),
+            "num_detections": len(detections),
+            "detections": detections
+        }))
+        
+        if detection_image_b64 is not None:
+            publish_message(MQTT_TOPIC_DETECTION_IMAGE, json.dumps({
+                "timestamp": time.time(),
+                "id": str(unique_id),
+                "detection_image": detection_image_b64
+            }))
+            
+        if depth_map_b64 is not None:
+            publish_message(MQTT_TOPIC_DEPTH_MAP, json.dumps({
+                "timestamp": time.time(),
+                "id": str(unique_id),
+                "depth_map": depth_map_b64
+            }))
+        
+        return jsonify({
+            'status': 'ok',
+            "timestamp": time.time(),
+            "num_detections": len(detections),
             "detections": detections,
-            "status": "ok",
             "detection_image": detection_image_b64,
-            "depth_image": depth_image_b64
+            "depth_map": depth_map_b64
         })
     except Exception as e:
         running_inference = False
@@ -428,7 +468,7 @@ def get_detections():
             "error": f"Error processing detections: {str(e)}",
             "status": "error"
         })
-
+    
 @app.route('/')
 def visualization():
     return '''
@@ -518,7 +558,7 @@ def visualization():
             document.getElementById('detect-btn').addEventListener('click', async function() {
                 const statusEl = document.getElementById('status');
                 const detectionImageEl = document.getElementById('detection-image');
-                const depthImageEl = document.getElementById('depth-image');
+                const depthMapEl = document.getElementById('depth-image');
                 const detectionInfoEl = document.getElementById('detection-info');
                 
                 statusEl.textContent = 'Running detection...';
@@ -537,11 +577,11 @@ def visualization():
                             detectionImageEl.src = '';
                         }
                         
-                        if (data.depth_image) {
-                            depthImageEl.src = 'data:image/jpeg;base64,' + data.depth_image;
+                        if (data.depth_map) {
+                            depthMapEl.src = 'data:image/jpeg;base64,' + data.depth_map;
                         } else {
-                            depthImageEl.alt = 'No depth map available';
-                            depthImageEl.src = '';
+                            depthMapEl.alt = 'No depth map available';
+                            depthMapEl.src = '';
                         }
                         
                         if (data.detections && data.detections.length > 0) {
@@ -578,4 +618,6 @@ def visualization():
     '''
 
 if __name__ == "__main__":
+    mqtt_thread = threading.Thread(target=start_mqtt_loop, daemon=True)
+    mqtt_thread.start()
     app.run(host='0.0.0.0', port=8005, debug=False, threaded=True)

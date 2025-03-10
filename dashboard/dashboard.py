@@ -26,7 +26,10 @@ RPI2_TOPICS = {
 RPI4_TOPICS = {
     "gyro": "pi4/gyro",
     "vibration_motor_controller": "pi4/vibration_motor_controller",
-    "pitch_yaw_roll": "pi4/pitch_yaw_roll"
+    "pitch_yaw_roll": "pi4/pitch_yaw_roll",
+    "detections": "pi4/detections",
+    "detection_image": "pi4/detection_image",
+    "depth_map": "pi4/depth_map"
 }
 
 MESSAGE_CATEGORIES = {
@@ -116,6 +119,24 @@ def on_rpi4_message(client, userdata, msg):
         elif topic == RPI4_TOPICS["pitch_yaw_roll"]:
             last_messages[MESSAGE_CATEGORIES["PITCH_YAW_ROLL"]] = payload
             socketio.emit(SOCKETIO_MQTT_MESSAGE, {'topic': topic, 'payload': msg.payload.decode()})
+            
+        elif topic == RPI4_TOPICS["detections"]:
+            last_messages[MESSAGE_CATEGORIES["CAMERA_DETECTIONS"]] = payload
+            socketio.emit(SOCKETIO_MQTT_UPDATE, {'topic': MESSAGE_CATEGORIES["CAMERA_DETECTIONS"], 'payload': payload})
+            
+        elif topic == RPI4_TOPICS["detection_image"]:
+            if last_messages[MESSAGE_CATEGORIES["CAMERA_DETECTIONS"]] is None:
+                last_messages[MESSAGE_CATEGORIES["CAMERA_DETECTIONS"]] = {}
+            last_messages[MESSAGE_CATEGORIES["CAMERA_DETECTIONS"]]["detection_image"] = payload
+            socketio.emit(SOCKETIO_MQTT_MESSAGE, {'topic': topic, 'payload': msg.payload.decode()})
+            
+        elif topic == RPI4_TOPICS["depth_map"]:
+            if last_messages[MESSAGE_CATEGORIES["CAMERA_DETECTIONS"]] is None:
+                last_messages[MESSAGE_CATEGORIES["CAMERA_DETECTIONS"]] = {}
+            last_messages[MESSAGE_CATEGORIES["CAMERA_DETECTIONS"]]["depth_map"] = payload
+            socketio.emit(SOCKETIO_MQTT_MESSAGE, {'topic': topic, 'payload': msg.payload.decode()})
+            
+            
     
     except Exception as e:
         print(f"Error processing rpi4 message from {topic}: {e}")

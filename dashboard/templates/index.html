@@ -367,6 +367,7 @@
     </div>
     
     <div class="dashboard">
+
         <div class="section">
             <div class="section-title">Camera</div>
             <div class="camera-grid">
@@ -384,6 +385,7 @@
                     <div class="card-title">
                         <span class="device-label device-headset">Headset</span>
                         Detection Image
+                        <span id="detectionImageStatus" class="status-indicator"></span>
                     </div>
                     <div class="image-container">
                         <img id="detection-image" class="camera-image" src="" alt="No detection image available" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
@@ -394,6 +396,7 @@
                     <div class="card-title">
                         <span class="device-label device-headset">Headset</span>
                         Depth Map
+                        <span id="depthMapStatus" class="status-indicator"></span>
                     </div>
                     <div class="image-container">
                         <img id="depth-image" class="camera-image" src="" alt="No depth map available" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
@@ -411,7 +414,7 @@
                     <div id="status"></div>
                 </div>
             </div>
-        </div>
+        </div>  
 
         <div class="section">
             <div class="section-title">Pitch Yaw Roll</div>
@@ -623,7 +626,7 @@
     <script>
         const socket = io();
         const statusUpdates = {};
-        
+
         const topicElements = {
             'Cane Button State': { element: document.getElementById('caneButtonState'), status: document.getElementById('caneStatus') },
             'Gyro': { element: document.getElementById('gyro'), status: document.getElementById('gyroStatus') },
@@ -639,7 +642,10 @@
         const pitchYawRollStatus = document.getElementById('pitchYawRollStatus');
         const headsetCalibrationStatus = document.getElementById('headsetCalibrationStatus');
         const caneCalibrationStatus = document.getElementById('caneCalibrationStatus');
-        
+
+        const detectionImageStatus = document.getElementById('detectionImageStatus');
+        const depthMapStatus = document.getElementById('depthMapStatus');    
+
         function polarToCartesian(centerX, centerY, radius, angleInDegrees) {
             const angleInRadians = (angleInDegrees - 90) * Math.PI / 180.0;
             return {
@@ -764,6 +770,7 @@
         const updateCaneYawGauge = createGauge('caneYawGauge', -90, 90);
         const updateCaneRollGauge = createGauge('caneRollGauge', -90, 90);
         
+
         socket.on('connect', function() {
             console.log('Connected to server');
             
@@ -782,10 +789,145 @@
                     } catch (e) {
                         console.error('Error parsing pitch_yaw_roll data:', e);
                     }
+                } else if(data.topic == 'pi4/detections') {
+                    try {
+                        const payload = JSON.parse(data.payload);
+                        updateDetections(payload);
+                    } catch (e) {
+                        console.error('Error parsing detections data:', e);
+                    }
+                } else if(data.topic == 'pi4/detection_image') {
+                    try {
+                        const payload = JSON.parse(data.payload);
+                        updateDetectionImage(payload);
+                    } catch (e) {
+                        console.error('Error parsing detection image data:', e);
+                    }
+                } else if(data.topic == 'pi4/depth_map') {
+                    try {
+                        const payload = JSON.parse(data.payload);
+                        updateDepthMap(payload);
+                    } catch (e) {
+                        console.error('Error parsing depth map data:', e);
+                    }
                 }
             });
         });
-        
+
+        function updateDetections(data) {
+            const detectionsEl = document.getElementById('cameraDetections');
+            const statusEl = document.getElementById('detectionsStatus');
+            
+            if (data && Object.keys(data).length > 0) {
+                detectionsEl.textContent = JSON.stringify(data, null, 2);
+                statusEl.className = 'status-indicator status-connected';
+            } else {
+                detectionsEl.textContent = "No detections found";
+                statusEl.className = 'status-indicator status-disconnected';
+            }
+        }
+
+        function updateDetectionImage(data) {
+            const detectionImageEl = document.getElementById('detection-image');
+            const detectionImagePlaceholder = detectionImageEl.nextElementSibling;
+            const detectionIdEl = document.getElementById('detectionImageStatus');
+            
+            if (data && data.id && data.detection_image) {
+                detectionImageEl.src = `data:image/jpeg;base64,${data.detection_image}`;
+                detectionImageEl.style.display = 'block';
+                detectionImagePlaceholder.style.display = 'none';
+                
+                // detectionIdEl.textContent = `ID: ${data.id}`;
+                detectionIdEl.className = 'status-indicator status-connected';
+            } else {
+                detectionImageEl.style.display = 'none';
+                detectionImagePlaceholder.style.display = 'flex';
+                detectionImagePlaceholder.textContent = 'No detection image available';
+                
+                detectionIdEl.className = 'status-indicator status-disconnected';
+            }
+        }
+
+        function updateDepthMap(data) {
+            const depthImageEl = document.getElementById('depth-image');
+            const depthImagePlaceholder = depthImageEl.nextElementSibling;
+            const depthIdEl = document.getElementById('depthMapStatus');
+            
+            if (data && data.id && data.depth_map) {
+                depthImageEl.src = `data:image/jpeg;base64,${data.depth_map}`;
+                depthImageEl.style.display = 'block';
+                depthImagePlaceholder.style.display = 'none';
+                
+                // Update status with ID
+                // depthIdEl.textContent = `ID: ${data.id}`;
+                depthIdEl.className = 'status-indicator status-connected';
+            } else {
+                depthImageEl.style.display = 'none';
+                depthImagePlaceholder.style.display = 'flex';
+                depthImagePlaceholder.textContent = 'No depth map available';
+                
+                depthIdEl.className = 'status-indicator status-disconnected';
+            }
+        }
+
+        document.getElementById('runDetectionBtn').addEventListener('click', function() {
+            const detectionImageEl = document.getElementById('detection-image');
+            const detectionImagePlaceholder = detectionImageEl.nextElementSibling;
+            const depthImageEl = document.getElementById('depth-image');
+            const depthImagePlaceholder = depthImageEl.nextElementSibling;
+            const detectionsEl = document.getElementById('cameraDetections');
+            const statusEl = document.getElementById('detectionsStatus');
+            const statusTextEl = document.getElementById('status');
+            const detectionIdEl = document.getElementById('detectionImageStatus');
+            const depthIdEl = document.getElementById('depthMapStatus');
+            
+            detectionsEl.textContent = "Running detection...";
+            statusEl.className = 'status-indicator status-connected';
+            statusTextEl.textContent = "Running detection...";
+            
+            // Reset the status of IDs when running a new detection
+            detectionIdEl.textContent = 'Awaiting new data...';
+            depthIdEl.textContent = 'Awaiting new data...';
+            
+            fetch('/run_detection')
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    statusTextEl.textContent = "Detection completed successfully";                                        
+                } else {
+                    // statusTextEl.textContent = "Error: " + (data.error || "Unknown error");
+                    detectionsEl.textContent = "Error: " + (data.error || "Unknown error");
+                    
+                    detectionImageEl.style.display = 'none';
+                    detectionImagePlaceholder.style.display = 'flex';
+                    detectionImagePlaceholder.textContent = 'Detection failed';
+                    
+                    depthImageEl.style.display = 'none';
+                    depthImagePlaceholder.style.display = 'flex';
+                    depthImagePlaceholder.textContent = 'Depth map unavailable';
+                    
+                    // detectionIdEl.textContent = 'Failed';
+                    // depthIdEl.textContent = 'Failed';
+                }
+                
+                setTimeout(() => {
+                    statusTextEl.textContent = "";
+                }, 5000);
+            })
+            .catch(error => {
+                detectionsEl.textContent = "Request failed: " + error.message;
+                statusEl.className = 'status-indicator status-disconnected';
+                statusTextEl.textContent = "Request failed: " + error.message;
+                
+                detectionIdEl.textContent = 'Request failed';
+                depthIdEl.textContent = 'Request failed';
+                
+                setTimeout(() => {
+                    statusTextEl.textContent = "";
+                }, 5000);
+            });
+        });
+
         function updateGyroGauges(data) {
             const pitchValue = document.getElementById('pitchValue');
             const yawValue = document.getElementById('yawValue');
@@ -968,75 +1110,7 @@
                 button.disabled = false;
             });
         });
-        
-        document.getElementById('runDetectionBtn').addEventListener('click', function() {
-            const detectionImageEl = document.getElementById('detection-image');
-            const detectionImagePlaceholder = detectionImageEl.nextElementSibling;
-            const depthImageEl = document.getElementById('depth-image');
-            const depthImagePlaceholder = depthImageEl.nextElementSibling;
-            const detectionsEl = document.getElementById('cameraDetections');
-            const statusEl = document.getElementById('detectionsStatus');
-            const statusTextEl = document.getElementById('status');
-            
-            detectionsEl.textContent = "Running detection...";
-            statusEl.className = 'status-indicator status-connected';
-            statusTextEl.textContent = "Running detection...";
-            
-            fetch('/run_detection')
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'ok') {
-                    statusTextEl.textContent = "Detection completed successfully";
-                    
-                    if (data.detection_image) {
-                        detectionImageEl.src = 'data:image/jpeg;base64,' + data.detection_image;
-                        detectionImageEl.style.display = 'block';
-                        detectionImagePlaceholder.style.display = 'none';
-                    } else {
-                        detectionImageEl.style.display = 'none';
-                        detectionImagePlaceholder.style.display = 'flex';
-                        detectionImagePlaceholder.textContent = 'No detection image available';
-                    }
-                    
-                    if (data.depth_image) {
-                        depthImageEl.src = 'data:image/jpeg;base64,' + data.depth_image;
-                        depthImageEl.style.display = 'block';
-                        depthImagePlaceholder.style.display = 'none';
-                    } else {
-                        depthImageEl.style.display = 'none';
-                        depthImagePlaceholder.style.display = 'flex';
-                        depthImagePlaceholder.textContent = 'No depth map available';
-                    }
-                    
-                    detectionsEl.textContent = JSON.stringify(data, null, 2);
-                } else {
-                    statusTextEl.textContent = "Error: " + (data.error || "Unknown error");
-                    detectionsEl.textContent = "Error: " + (data.error || "Unknown error");
-                    
-                    detectionImageEl.style.display = 'none';
-                    detectionImagePlaceholder.style.display = 'flex';
-                    detectionImagePlaceholder.textContent = 'Detection failed';
-                    
-                    depthImageEl.style.display = 'none';
-                    depthImagePlaceholder.style.display = 'flex';
-                    depthImagePlaceholder.textContent = 'Depth map unavailable';
-                }
                 
-                setTimeout(() => {
-                    statusTextEl.textContent = "";
-                }, 5000);
-            })
-            .catch(error => {
-                detectionsEl.textContent = "Request failed: " + error.message;
-                statusEl.className = 'status-indicator status-disconnected';
-                statusTextEl.textContent = "Request failed: " + error.message;
-                
-                setTimeout(() => {
-                    statusTextEl.textContent = "";
-                }, 5000);
-            });
-        });
-        
         function setupImageErrorHandling(imageId) {
             const imgEl = document.getElementById(imageId);
             if (imgEl) {
