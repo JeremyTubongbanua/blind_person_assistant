@@ -407,10 +407,18 @@
                     <div class="card-title">
                         <span class="device-label device-headset">Headset</span>
                         Camera Detections
+                        <span id="cameraDetectionsStatus" class="status-indicator"></span>
+                    </div>
+                    <pre id="cameraDetectionsData">Awaiting data...</pre>
+                </div>
+                <div class="data-card">
+                    <div class="card-title">
+                        <span class="device-label device-headset">Headset</span>
+                        Run Detection
                         <span id="detectionsStatus" class="status-indicator"></span>
                     </div>
-                    <pre id="cameraDetections">Awaiting data...</pre>
                     <button id="runDetectionBtn" class="detection-btn">Run Detection</button>
+                    <pre id="cameraDetections">Awaiting data...</pre>
                     <div id="status"></div>
                 </div>
             </div>
@@ -815,7 +823,7 @@
         });
 
         function updateDetections(data) {
-            const detectionsEl = document.getElementById('cameraDetections');
+            const detectionsEl = document.getElementById('cameraDetectionsData');
             const statusEl = document.getElementById('detectionsStatus');
             
             if (data && Object.keys(data).length > 0) {
@@ -885,9 +893,8 @@
             statusEl.className = 'status-indicator status-connected';
             statusTextEl.textContent = "Running detection...";
             
-            // Reset the status of IDs when running a new detection
-            detectionIdEl.textContent = 'Awaiting new data...';
-            depthIdEl.textContent = 'Awaiting new data...';
+            // detectionIdEl.textContent = 'Awaiting new data...';
+            // depthIdEl.textContent = 'Awaiting new data...';
             
             fetch('/run_detection')
             .then(response => response.json())
@@ -895,7 +902,6 @@
                 if (data.status === 'ok') {
                     statusTextEl.textContent = "Detection completed successfully";                                        
                 } else {
-                    // statusTextEl.textContent = "Error: " + (data.error || "Unknown error");
                     detectionsEl.textContent = "Error: " + (data.error || "Unknown error");
                     
                     detectionImageEl.style.display = 'none';

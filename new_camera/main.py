@@ -1,3 +1,149 @@
+html_text = '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Detection Visualization</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                margin: 20px;
+                background-color: #f0f0f0;
+            }
+            .container {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 20px;
+            }
+            .image-container {
+                background-color: white;
+                padding: 10px;
+                border-radius: 5px;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            }
+            h2 {
+                margin-top: 0;
+            }
+            button {
+                background-color: #4CAF50;
+                border: none;
+                color: white;
+                padding: 10px 20px;
+                text-align: center;
+                text-decoration: none;
+                display: inline-block;
+                font-size: 16px;
+                margin: 20px 0;
+                cursor: pointer;
+                border-radius: 4px;
+            }
+            button:hover {
+                background-color: #45a049;
+            }
+            img {
+                max-width: 100%;
+                height: auto;
+                border: 1px solid #ddd;
+            }
+            #status {
+                margin: 10px 0;
+                font-weight: bold;
+            }
+            .detection-info {
+                margin-top: 10px;
+                padding: 10px;
+                background-color: #f9f9f9;
+                border-radius: 4px;
+                max-height: 200px;
+                overflow-y: auto;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Object Detection Visualization</h1>
+        <button id="detect-btn">Run Detection</button>
+        <div id="status">Ready</div>
+        <div class="container">
+            <div class="image-container">
+                <h2>Live Video Stream</h2>
+                <img id="live-stream" src="/video_stream" alt="Live video stream">
+            </div>
+            <div class="image-container">
+                <h2>Detection Image</h2>
+                <img id="detection-image" src="" alt="No detection image available">
+            </div>
+            <div class="image-container">
+                <h2>Depth Map</h2>
+                <img id="depth-image" src="" alt="No depth map available">
+            </div>
+        </div>
+        <div class="image-container">
+            <h2>Detection Results</h2>
+            <div id="detection-info" class="detection-info">No detections yet</div>
+        </div>
+
+        <script>
+            document.getElementById('detect-btn').addEventListener('click', async function() {
+                const statusEl = document.getElementById('status');
+                const detectionImageEl = document.getElementById('detection-image');
+                const depthMapEl = document.getElementById('depth-image');
+                const detectionInfoEl = document.getElementById('detection-info');
+                
+                statusEl.textContent = 'Running detection...';
+                
+                try {
+                    const response = await fetch('/detections');
+                    const data = await response.json();
+                    
+                    if (data.status === 'ok') {
+                        statusEl.textContent = 'Detection completed successfully';
+                        
+                        if (data.detection_image) {
+                            detectionImageEl.src = 'data:image/jpeg;base64,' + data.detection_image;
+                        } else {
+                            detectionImageEl.alt = 'No detection image available';
+                            detectionImageEl.src = '';
+                        }
+                        
+                        if (data.depth_map) {
+                            depthMapEl.src = 'data:image/jpeg;base64,' + data.depth_map;
+                        } else {
+                            depthMapEl.alt = 'No depth map available';
+                            depthMapEl.src = '';
+                        }
+                        
+                        if (data.detections && data.detections.length > 0) {
+                            let infoHTML = '<h3>Found ' + data.detections.length + ' objects:</h3>';
+                            infoHTML += '<ul>';
+                            
+                            data.detections.forEach((det, index) => {
+                                infoHTML += '<li>' + det.label + ' (confidence: ' + det.confidence.toFixed(2) + ')';
+                                
+                                if (det.distance !== undefined) {
+                                    infoHTML += ' - Distance: ' + det.distance.toFixed(2) + 'm';
+                                }
+                                
+                                infoHTML += '</li>';
+                            });
+                            
+                            infoHTML += '</ul>';
+                            detectionInfoEl.innerHTML = infoHTML;
+                        } else {
+                            detectionInfoEl.textContent = 'No objects detected';
+                        }
+                    } else {
+                        statusEl.textContent = 'Error: ' + (data.error || 'Unknown error');
+                        detectionInfoEl.textContent = 'Detection failed: ' + (data.error || 'Unknown error');
+                    }
+                } catch (error) {
+                    statusEl.textContent = 'Request failed: ' + error.message;
+                    detectionInfoEl.textContent = 'Request failed: ' + error.message;
+                }
+            });
+        </script>
+    </body>
+    </html>
+    '''
+
 import cv2
 import depthai as dai
 import numpy as np
@@ -25,9 +171,9 @@ app = Flask(__name__)
 
 mqtt_client = mqtt.Client()
 mqtt_client.connect(MQTT_HOST, MQTT_PORT, 60)
+
 def start_mqtt_loop():
     mqtt_client.loop_forever()
-
 
 def publish_message(topic, message):
     mqtt_client.publish(topic, message)
@@ -51,11 +197,11 @@ def create_pipeline():
     nnOut.setStreamName("nn")
     xoutDepth.setStreamName("depth")
     
-    camRgb.setPreviewSize(640, 640)
+    camRgb.setPreviewSize(320,320)
     camRgb.setResolution(dai.ColorCameraProperties.SensorResolution.THE_1080_P)
     camRgb.setInterleaved(False)
     camRgb.setColorOrder(dai.ColorCameraProperties.ColorOrder.BGR)
-    camRgb.setFps(30)
+    camRgb.setFps(24)
     
     monoLeft.setResolution(dai.MonoCameraProperties.SensorResolution.THE_400_P)
     monoLeft.setBoardSocket(dai.CameraBoardSocket.LEFT)
@@ -299,12 +445,6 @@ def frame_to_base64(frame):
     encoded_image = base64.b64encode(buffer).decode('utf-8')
     return encoded_image
 
-with frame_lock:
-    latest_frame = create_placeholder_frame()
-
-pipeline_thread = threading.Thread(target=run_pipeline, daemon=True)
-pipeline_thread.start()
-
 @app.route('/video_stream')
 def video_stream():
     return Response(generate_frames(),
@@ -354,9 +494,10 @@ def get_detections():
         
         img = dai.ImgFrame()
         img.setType(dai.ImgFrame.Type.BGR888p)
-        img.setWidth(640)
-        img.setHeight(640)
-        img.setData(cv2.resize(frame_copy, (640, 640)).transpose(2, 0, 1).flatten())
+        c = 640
+        img.setWidth(c)
+        img.setHeight(c)
+        img.setData(cv2.resize(frame_copy, (c, c)).transpose(2, 0, 1).flatten())
         
         nn_in.send(img)
         
@@ -471,153 +612,16 @@ def get_detections():
     
 @app.route('/')
 def visualization():
-    return '''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Detection Visualization</title>
-        <style>
-            body {
-                font-family: Arial, sans-serif;
-                margin: 20px;
-                background-color: #f0f0f0;
-            }
-            .container {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 20px;
-            }
-            .image-container {
-                background-color: white;
-                padding: 10px;
-                border-radius: 5px;
-                box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            }
-            h2 {
-                margin-top: 0;
-            }
-            button {
-                background-color: #4CAF50;
-                border: none;
-                color: white;
-                padding: 10px 20px;
-                text-align: center;
-                text-decoration: none;
-                display: inline-block;
-                font-size: 16px;
-                margin: 20px 0;
-                cursor: pointer;
-                border-radius: 4px;
-            }
-            button:hover {
-                background-color: #45a049;
-            }
-            img {
-                max-width: 100%;
-                height: auto;
-                border: 1px solid #ddd;
-            }
-            #status {
-                margin: 10px 0;
-                font-weight: bold;
-            }
-            .detection-info {
-                margin-top: 10px;
-                padding: 10px;
-                background-color: #f9f9f9;
-                border-radius: 4px;
-                max-height: 200px;
-                overflow-y: auto;
-            }
-        </style>
-    </head>
-    <body>
-        <h1>Object Detection Visualization</h1>
-        <button id="detect-btn">Run Detection</button>
-        <div id="status">Ready</div>
-        <div class="container">
-            <div class="image-container">
-                <h2>Live Video Stream</h2>
-                <img id="live-stream" src="/video_stream" alt="Live video stream">
-            </div>
-            <div class="image-container">
-                <h2>Detection Image</h2>
-                <img id="detection-image" src="" alt="No detection image available">
-            </div>
-            <div class="image-container">
-                <h2>Depth Map</h2>
-                <img id="depth-image" src="" alt="No depth map available">
-            </div>
-        </div>
-        <div class="image-container">
-            <h2>Detection Results</h2>
-            <div id="detection-info" class="detection-info">No detections yet</div>
-        </div>
-
-        <script>
-            document.getElementById('detect-btn').addEventListener('click', async function() {
-                const statusEl = document.getElementById('status');
-                const detectionImageEl = document.getElementById('detection-image');
-                const depthMapEl = document.getElementById('depth-image');
-                const detectionInfoEl = document.getElementById('detection-info');
-                
-                statusEl.textContent = 'Running detection...';
-                
-                try {
-                    const response = await fetch('/detections');
-                    const data = await response.json();
-                    
-                    if (data.status === 'ok') {
-                        statusEl.textContent = 'Detection completed successfully';
-                        
-                        if (data.detection_image) {
-                            detectionImageEl.src = 'data:image/jpeg;base64,' + data.detection_image;
-                        } else {
-                            detectionImageEl.alt = 'No detection image available';
-                            detectionImageEl.src = '';
-                        }
-                        
-                        if (data.depth_map) {
-                            depthMapEl.src = 'data:image/jpeg;base64,' + data.depth_map;
-                        } else {
-                            depthMapEl.alt = 'No depth map available';
-                            depthMapEl.src = '';
-                        }
-                        
-                        if (data.detections && data.detections.length > 0) {
-                            let infoHTML = '<h3>Found ' + data.detections.length + ' objects:</h3>';
-                            infoHTML += '<ul>';
-                            
-                            data.detections.forEach((det, index) => {
-                                infoHTML += '<li>' + det.label + ' (confidence: ' + det.confidence.toFixed(2) + ')';
-                                
-                                if (det.distance !== undefined) {
-                                    infoHTML += ' - Distance: ' + det.distance.toFixed(2) + 'm';
-                                }
-                                
-                                infoHTML += '</li>';
-                            });
-                            
-                            infoHTML += '</ul>';
-                            detectionInfoEl.innerHTML = infoHTML;
-                        } else {
-                            detectionInfoEl.textContent = 'No objects detected';
-                        }
-                    } else {
-                        statusEl.textContent = 'Error: ' + (data.error || 'Unknown error');
-                        detectionInfoEl.textContent = 'Detection failed: ' + (data.error || 'Unknown error');
-                    }
-                } catch (error) {
-                    statusEl.textContent = 'Request failed: ' + error.message;
-                    detectionInfoEl.textContent = 'Request failed: ' + error.message;
-                }
-            });
-        </script>
-    </body>
-    </html>
-    '''
+    return html_text
 
 if __name__ == "__main__":
     mqtt_thread = threading.Thread(target=start_mqtt_loop, daemon=True)
     mqtt_thread.start()
+    
+    with frame_lock:
+        latest_frame = create_placeholder_frame()
+
+    pipeline_thread = threading.Thread(target=run_pipeline, daemon=True)
+    pipeline_thread.start()
+    
     app.run(host='0.0.0.0', port=8005, debug=False, threaded=True)
