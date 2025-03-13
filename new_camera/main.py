@@ -337,7 +337,7 @@ def run_pipeline():
                     with frame_lock:
                         latest_frame = frame.copy()
                     
-                    time.sleep(0.01)
+                    time.sleep(0.1)
                 except dai.XLinkError as e:
                     print(f"XLink error during frame processing: {e}")
                     if "X_LINK_ERROR" in str(e):
@@ -396,7 +396,7 @@ def generate_frames():
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
         
-        time.sleep(0.033)
+        time.sleep(0.1)
 
 def visualize_depth(depth_frame):
     depth_colormap = cv2.normalize(depth_frame, None, 0, 255, cv2.NORM_MINMAX)
@@ -509,7 +509,7 @@ def get_detections():
             in_nn = nn_out.tryGet()
             if in_nn is not None:
                 break
-            time.sleep(0.05)
+            time.sleep(0.1)
         
         if in_nn is None:
             running_inference = False
