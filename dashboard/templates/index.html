@@ -421,6 +421,17 @@
                     <pre id="cameraDetections">Awaiting data...</pre>
                     <div id="status"></div>
                 </div>
+                <div class="data-card">
+                    <div class="card-title">
+                        <span class="device-label device-headset">Headset</span>
+                        Camera Control
+                    </div>
+                    <button id="startButton" class="detection-btn">Start</button>
+                    <button id="stopButton" class="detection-btn">Stop</button>
+                    <button id="restartButton" class="detection-btn">Restart</button>
+                    <button id="getStatusButton" class="detection-btn">Get Status</button>
+                    <pre id="controlStatus">Awaiting status...</pre>
+                </div>
             </div>
         </div>  
 
@@ -1341,6 +1352,80 @@
             })
             .catch(error => {
                 statusArea.textContent = "Zeroing failed: " + error.message;
+            });
+        });
+    
+        document.getElementById('startButton').addEventListener('click', function() {
+            const statusElement = document.getElementById('controlStatus');
+            statusElement.textContent = "Starting camera...";
+            
+            fetch('/start_camera', {
+            method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+            statusElement.textContent = data.message || "Camera started";
+            setTimeout(() => {
+                statusElement.textContent = "";
+            }, 5000);
+            })
+            .catch(error => {
+            statusElement.textContent = `Error: ${error.message}`;
+            });
+        });
+
+        document.getElementById('stopButton').addEventListener('click', function() {
+            const statusElement = document.getElementById('controlStatus');
+            statusElement.textContent = "Stopping camera...";
+            
+            fetch('/stop_camera', {
+            method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+            statusElement.textContent = data.message || "Camera stopped";
+            setTimeout(() => {
+                statusElement.textContent = "";
+            }, 5000);
+            })
+            .catch(error => {
+            statusElement.textContent = `Error: ${error.message}`;
+            });
+        });
+
+        document.getElementById('getStatusButton').addEventListener('click', function() {
+            const statusElement = document.getElementById('controlStatus');
+            statusElement.textContent = "Getting camera status...";
+            
+            fetch('/camera_status')
+            .then(response => response.json())
+            .then(data => {
+            statusElement.textContent = JSON.stringify(data, null, 2);
+            setTimeout(() => {
+                statusElement.textContent = "";
+            }, 5000);
+            })
+            .catch(error => {
+            statusElement.textContent = `Error: ${error.message}`;
+            });
+        });
+
+        document.getElementById('restartButton').addEventListener('click', function() {
+            const statusElement = document.getElementById('controlStatus');
+            statusElement.textContent = "Restarting camera...";
+            
+            fetch('/restart_camera', {
+            method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+            statusElement.textContent = data.message || "Camera restarted";
+            setTimeout(() => {
+                statusElement.textContent = "";
+            }, 5000);
+            })
+            .catch(error => {
+            statusElement.textContent = `Error: ${error.message}`;
             });
         });
     </script>

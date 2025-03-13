@@ -42,6 +42,7 @@ MESSAGE_CATEGORIES = {
     "PITCH_YAW_ROLL": "Pitch Yaw Roll"
 }
 
+CAMERA_CONTROL_API_URL = "http://localhost:8010"
 VIBRATION_API_URL = "http://localhost:5000/vibrate"
 DETECTION_API_URL = "http://localhost:8005/detections"
 AUDIO_API_BASE_URL = "http://localhost:5001"
@@ -54,6 +55,9 @@ HEADSET_ZERO_ENDPOINT = f"http://{RPI4_BROKER}:5002/zero"
 CANE_CALIBRATION_ENDPOINT = f"http://{RPI2_BROKER}:5002/calibrate"
 CANE_ZERO_ENDPOINT = f"http://{RPI2_BROKER}:5002/zero"
 MQTT_API_URL = "http://localhost:8080/mqtt_service"
+CAMERA_CONTROL_START_API_ENDPOINT = f"{CAMERA_CONTROL_API_URL}/start"
+CAMERA_CONTROL_STOP_API_ENDPOINT = f"{CAMERA_CONTROL_API_URL}/stop"
+CAMERA_CONTROL_STATUS_API_ENDPOINT = f"{CAMERA_CONTROL_API_URL}/status"
 
 DEFAULT_TTS_SPEED = 125
 DEFAULT_TTS_VOICE = "en-us"
@@ -350,6 +354,38 @@ def calibrate_cane_gyro():
 def zero_cane_gyro():
     try:
         response = requests.get(f"{CANE_ZERO_ENDPOINT}")
+        return jsonify(response.json()), response.status_code
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+@app.route('/start_camera', methods=['POST'])
+def start_camera():
+    try:
+        response = requests.post(CAMERA_CONTROL_START_API_ENDPOINT)
+        return jsonify(response.json()), response.status_code
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+@app.route('/stop_camera', methods=['POST'])
+def stop_camera():
+    try:
+        response = requests.post(CAMERA_CONTROL_STOP_API_ENDPOINT)
+        return jsonify(response.json()), response.status_code
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+@app.route('/camera_status', methods=['GET'])
+def camera_status():
+    try:
+        response = requests.get(CAMERA_CONTROL_STATUS_API_ENDPOINT)
+        return jsonify(response.json()), response.status_code
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/restart_camera', methods=['POST'])
+def restart_camera():
+    try:
+        response = requests.post(f"{CAMERA_CONTROL_API_URL}/restart")
         return jsonify(response.json()), response.status_code
     except Exception as e:
         return jsonify({"error": str(e)}), 500
