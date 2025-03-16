@@ -8,7 +8,6 @@ import threading
 
 app = Flask(__name__)
 
-CARD_NUMBER = 1
 VOLUME_CONTROL = "PCM"
 AUDIO_FILES_DIR = "files"
 DEFAULT_VOICE = "en-us"
@@ -16,6 +15,42 @@ DEFAULT_SPEED = 100
 
 playback_active = False
 playback_lock = threading.Lock()
+
+def detect_usb_speaker():
+    global CARD_NUMBER
+    
+    try:
+        output = subprocess.check_output("aplay -l", shell=True).decode('utf-8')
+        print("Detected audio devices:")
+        print(output)
+        
+        usb_card = None
+        for line in output.split('\n'):
+            if "USB Audio" in line:
+                match = re.search(r'card (\d+):', line)
+                if match:
+                    usb_card = int(match.group(1))
+                    break
+        
+        if usb_card is not None:
+            CARD_NUMBER = usb_card
+            print(f"USB Audio device detected on card {CARD_NUMBER}")
+            os.environ["SDL_AUDIODRIVER"] = "alsa"
+            os.environ["AUDIODEV"] = f'plughw:{CARD_NUMBER},0'
+            return True
+        else:
+            print("No USB audio device found, using default card 1")
+            CARD_NUMBER = 1
+            os.environ["SDL_AUDIODRIVER"] = "alsa"
+            os.environ["AUDIODEV"] = f'plughw:{CARD_NUMBER},0'
+            return False
+    except Exception as e:
+        print(f"Error detecting USB speaker: {e}")
+        print("Using default card 1")
+        CARD_NUMBER = 1
+        os.environ["SDL_AUDIODRIVER"] = "alsa"
+        os.environ["AUDIODEV"] = f'plughw:{CARD_NUMBER},0'
+        return False
 
 def get_current_volume():
     try:
@@ -55,8 +90,6 @@ def play_audio_file(file_path, volume_scale=1.0):
         with playback_lock:
             playback_active = True
         
-        os.environ["SDL_AUDIODRIVER"] = "alsa"
-        os.environ["AUDIODEV"] = 'plughw:1,0'
         if not pygame.mixer.get_init():
             pygame.mixer.init()
         else:
@@ -198,11 +231,26 @@ def api_stop_playback():
     stop_playback()
     return jsonify({"message": "Playback stopped"})
 
+@app.route('/card_info', methods=['GET'])
+def api_card_info():
+    try:
+        output = subprocess.check_output("aplay -l", shell=True).decode('utf-8')
+        return jsonify({
+            "card_number": CARD_NUMBER,
+            "audio_devices": output,
+            "volume": get_current_volume()
+        })
+    except Exception as e:
+        return jsonify({"error": f"Error getting card info: {e}"}), 500
+
 if __name__ == '__main__':
     os.makedirs(AUDIO_FILES_DIR, exist_ok=True)
     
+    detect_usb_speaker()
+    
     pygame.mixer.init()
     
+    print(f"Using audio card {CARD_NUMBER}")
     play_audio_file('files/mixkit-retro-game-notification-212.wav')
     
     app.run(host='0.0.0.0', port=5001, debug=False)
