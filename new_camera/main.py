@@ -324,6 +324,7 @@ def run_pipeline():
                     inRgb = qRgb.get()
                     frame = inRgb.getCvFrame()
                     
+                    frame = cv2.flip(frame, 1)
                     frame = cv2.flip(frame, 0)
                     
                     inDepth = qDepth.tryGet()
