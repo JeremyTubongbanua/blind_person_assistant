@@ -43,5 +43,8 @@ def increase_volume():
 def mute_speaker():
     pass
 
-def gyro_status():
-    pass
+def change_tts_speed():
+    print_and_publish("TTS Speed Change function called", None)
+
+def change_tts_language():
+    print_and_publish("TTS Language Change function called", None)

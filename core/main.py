@@ -6,10 +6,21 @@ import queue
 import paho.mqtt.client as mqtt
 from menu_handlers import *
 
+def change_tts_speed():
+    print_and_publish("TTS Speed Change function called", None)
+
+def change_tts_language():
+    print_and_publish("TTS Language Change function called", None)
+
 TTS_URL = "http://localhost:5001/tts"
 MQTT_BROKER = "192.168.2.219"
 MQTT_PORT = 1883
 MQTT_TOPIC = "pi2/button_state"
+
+def print_and_publish(message, mqtt_client=None):
+    print(message)
+    if mqtt_client:
+        mqtt_client.publish("pi4/menu_logs", message)
 
 class MenuSystem:
     def __init__(self):
@@ -22,6 +33,8 @@ class MenuSystem:
         self.current_menu_index = 0
         self.tts_speed = 1.0
         self.tts_voice = "en-US-Neural2-F"
+        self.tts_language = "en-US"
+        self.mqtt_client = None
         
         self.menus = {
             "main": [
@@ -32,7 +45,7 @@ class MenuSystem:
                 {"name": "Gyro Settings", "submenu": "gyro"},
                 {"name": "Camera Settings", "submenu": "camera"},
                 {"name": "Volume Settings", "submenu": "volume"},
-                {"name": "Gyro Status", "action": gyro_status}
+                {"name": "TTS Settings", "submenu": "tts"},
             ],
             "gyro": [
                 {"name": "Calibrate Gyros", "action": calibrate_gyros},
@@ -53,19 +66,49 @@ class MenuSystem:
                 {"name": "Increase Volume by 10", "action": increase_volume},
                 {"name": "Mute Speaker", "action": mute_speaker},
                 {"name": "Back to Main Menu", "submenu": "main"}
+            ],
+            "tts": [
+                {"name": "Change Text To Speech Speed", "action": change_tts_speed},
+                {"name": "Change Text To Speech Language", "action": change_tts_language},
+                {"name": "Back to Main Menu", "submenu": "main"}
             ]
         }
         
         self.menu_history = []
+
+    def publish_menu_structure(self):
+        if not self.mqtt_client:
+            return
+            
+        current_items = self.get_current_menu_items()
+        menu_repr = []
+        
+        for i, item in enumerate(current_items):
+            if i == self.current_menu_index:
+                menu_repr.append(f"{item['name']} <-")
+            else:
+                menu_repr.append(item['name'])
+        
+        menu_text = "\n".join(menu_repr)
+        
+        path = []
+        for menu, _ in self.menu_history:
+            path.append(menu)
+        path.append(self.current_menu)
+        
+        menu_path = " > ".join(path)
+        full_menu = f"{menu_path}\n\n{menu_text}"
+        
+        self.mqtt_client.publish("pi4/menu", full_menu)
 
     def send_tts(self, text, speed=150, voice_name='en-us'):                
         try:
             url = f"{TTS_URL}?text={text}&speed={speed}&voice_name={voice_name}"
             response = requests.get(url)
             if response.status_code != 200:
-                print(f"TTS request failed with status code {response.status_code}")
+                print_and_publish(f"TTS request failed with status code {response.status_code}", self.mqtt_client)
         except Exception as e:
-            print(f"Error sending TTS request: {e}")
+            print_and_publish(f"Error sending TTS request: {e}", self.mqtt_client)
 
     def button_event_worker(self):
         while self.running:
@@ -73,18 +116,18 @@ class MenuSystem:
                 event_data = self.button_event_queue.get(timeout=0.5)
                 if event_data:
                     button, event = event_data
-                    print(f"Processing event: {button} {event}")
+                    print_and_publish(f"Processing event: {button} {event}", self.mqtt_client)
                     for subscriber in self.button_subscribers:
                         if subscriber:
                             try:
                                 subscriber(button, event)
                             except Exception as e:
-                                print(f"Error in button subscriber: {e}")
+                                print_and_publish(f"Error in button subscriber: {e}", self.mqtt_client)
                 self.button_event_queue.task_done()
             except queue.Empty:
                 pass
             except Exception as e:
-                print(f"Error in button event worker: {e}")
+                print_and_publish(f"Error in button event worker: {e}", self.mqtt_client)
 
     def subscribe_to_buttons(self, callback):
         self.button_subscribers.append(callback)
@@ -95,9 +138,10 @@ class MenuSystem:
             self.button_subscribers[subscriber_id] = None
 
     def on_connect(self, client, userdata, flags, rc):
-        print(f"Connected with result code {rc}")
+        print_and_publish(f"Connected with result code {rc}", client)
         client.subscribe(MQTT_TOPIC)
         self.send_tts("Menu system connected. Use button 2 to cycle through options, button 1 to select.")
+        self.publish_menu_structure()
 
     def on_message(self, client, userdata, msg):
         try:
@@ -108,30 +152,30 @@ class MenuSystem:
             
             self.button_state = payload
             
-            print(f"MQTT: B1: {prev_button1}->{self.button_state['button1']}, B2: {prev_button2}->{self.button_state['button2']}")
+            print_and_publish(f"MQTT: B1: {prev_button1}->{self.button_state['button1']}, B2: {prev_button2}->{self.button_state['button2']}", client)
             
             if self.button_state["button1"] and not prev_button1:
-                print("Queuing button1 pressed event")
+                print_and_publish("Queuing button1 pressed event", client)
                 self.button_event_queue.put(("button1", "pressed"))
                 if self.in_menu:
                     self.select_current_option()
             elif not self.button_state["button1"] and prev_button1:
-                print("Queuing button1 released event")
+                print_and_publish("Queuing button1 released event", client)
                 self.button_event_queue.put(("button1", "released"))
                 
             if self.button_state["button2"] and not prev_button2:
-                print("Queuing button2 pressed event")
+                print_and_publish("Queuing button2 pressed event", client)
                 self.button_event_queue.put(("button2", "pressed"))
                 if self.in_menu:
                     self.cycle_menu()
             elif not self.button_state["button2"] and prev_button2:
-                print("Queuing button2 released event")
+                print_and_publish("Queuing button2 released event", client)
                 self.button_event_queue.put(("button2", "released"))
             
         except json.JSONDecodeError:
-            print(f"Error decoding JSON: {msg.payload}")
+            print_and_publish(f"Error decoding JSON: {msg.payload}", client)
         except Exception as e:
-            print(f"Error processing message: {e}")
+            print_and_publish(f"Error processing message: {e}", client)
 
     def get_current_menu_items(self):
         return self.menus.get(self.current_menu, [])
@@ -156,7 +200,8 @@ class MenuSystem:
         current_option = self.get_current_menu_option()
         option_index = self.current_menu_index + 1
         self.send_tts(f"option {option_index}: {current_option}")
-        print(f"Current menu option: {option_index}: {current_option}")
+        print_and_publish(f"Current menu option: {option_index}: {current_option}", self.mqtt_client)
+        self.publish_menu_structure()
 
     def select_current_option(self):
         items = self.get_current_menu_items()
@@ -168,7 +213,7 @@ class MenuSystem:
         current_option = current_item["name"]
         option_index = self.current_menu_index + 1
         self.send_tts(f"Selected {current_option}")
-        print(f"Selected option {option_index}: {current_option}")
+        print_and_publish(f"Selected option {option_index}: {current_option}", self.mqtt_client)
         
         if "submenu" in current_item:
             submenu = current_item["submenu"]
@@ -178,7 +223,8 @@ class MenuSystem:
             new_option = self.get_current_menu_option()
             new_index = self.current_menu_index + 1
             self.send_tts(f"Submenu {submenu}. option {new_index}: {new_option}")
-            print(f"Entered submenu {submenu}. Current option {new_index}: {new_option}")
+            print_and_publish(f"Entered submenu {submenu}. Current option {new_index}: {new_option}", self.mqtt_client)
+            self.publish_menu_structure()
         elif "action" in current_item:
             action = current_item["action"]
             if action:
@@ -187,7 +233,7 @@ class MenuSystem:
                     action()
                     self.in_menu = True
                 except Exception as e:
-                    print(f"Error executing action: {e}")
+                    print_and_publish(f"Error executing action: {e}", self.mqtt_client)
                     self.send_tts(f"Error executing action")
                     self.in_menu = True
 
@@ -198,18 +244,19 @@ class MenuSystem:
         
         try:
             client.connect(MQTT_BROKER, MQTT_PORT, 60)
+            self.mqtt_client = client
             return client
         except Exception as e:
-            print(f"Error connecting to MQTT broker: {e}")
+            print_and_publish(f"Error connecting to MQTT broker: {e}", None)
             return None
 
     def run(self):
         client = self.init_mqtt()
         if client is None:
-            print("Failed to initialize MQTT client. Exiting.")
+            print_and_publish("Failed to initialize MQTT client. Exiting.", None)
             return
         
-        print("Starting button event worker thread")
+        print_and_publish("Starting button event worker thread", client)
         event_thread = threading.Thread(target=self.button_event_worker, daemon=True)
         event_thread.start()
         
@@ -219,19 +266,20 @@ class MenuSystem:
         option_index = self.current_menu_index + 1
         self.send_tts(f"Menu system initialized.")
         self.send_tts(f"Current menu option {option_index}: {current_option}")
+        self.publish_menu_structure()
         
         try:
-            print("Entering main loop")
+            print_and_publish("Entering main loop", client)
             while self.running:
                 time.sleep(0.1)
         except KeyboardInterrupt:
-            print("Interrupted by user")
+            print_and_publish("Interrupted by user", client)
         finally:
             self.running = False
             event_thread.join(timeout=1.0)
             client.loop_stop()
             client.disconnect()
-            print("Exiting menu system")
+            print_and_publish("Exiting menu system", None)
 
 def main():
     menu_system = MenuSystem()
