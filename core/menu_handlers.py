@@ -1,5 +1,10 @@
 import requests
 import asyncio
+import subprocess
+import subprocess
+import os
+import subprocess
+import os
 
 SPEAKER_API_URL = "http://localhost:5001"
 TTS_URL = "http://localhost:5001/tts"
@@ -62,16 +67,73 @@ class MenuHandlers:
         pass
     
     def start_camera(self):
-        pass
+        try:
+            response = requests.post("http://localhost:8010/start")
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("status", False):
+                    self.menu_system.send_tts("Camera started successfully")
+                else:
+                    self.menu_system.send_tts(f"Failed to start camera: {data.get('error', 'Unknown error')}")
+            else:
+                self.menu_system.send_tts(f"Failed to start camera, response code: {response.status_code}")
+        except Exception as e:
+            self.menu_system.send_tts(f"Error starting camera: {str(e)}")
     
     def stop_camera(self):
-        pass
+        try:
+            response = requests.post("http://localhost:8010/stop")
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("status", False):
+                    self.menu_system.send_tts("Camera stopped successfully")
+                else:
+                    self.menu_system.send_tts(f"Failed to stop camera: {data.get('error', 'Unknown error')}")
+            else:
+                self.menu_system.send_tts(f"Failed to stop camera, response code: {response.status_code}")
+        except Exception as e:
+            self.menu_system.send_tts(f"Error stopping camera: {str(e)}")
     
     def restart_camera(self):
-        pass
+        try:
+            response = requests.post("http://localhost:8010/restart")
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("status", False):
+                    self.menu_system.send_tts("Camera restarted successfully")
+                else:
+                    self.menu_system.send_tts(f"Failed to restart camera: {data.get('error', 'Unknown error')}")
+            else:
+                self.menu_system.send_tts(f"Failed to restart camera, response code: {response.status_code}")
+        except Exception as e:
+            self.menu_system.send_tts(f"Error restarting camera: {str(e)}")
     
     def camera_status(self):
-        pass
+        try:
+            response = requests.get("http://localhost:8010/status")
+            if response.status_code == 200:
+                data = response.json()
+                if "error" in data:
+                    if "status" in data:
+                        status = data["status"]
+                        if status == "disconnected":
+                            self.menu_system.send_tts("Camera is disconnected")
+                        elif status == "busy":
+                            self.menu_system.send_tts("Camera is busy running detection")
+                        elif status == "unavailable":
+                            self.menu_system.send_tts("Camera is unavailable or in use by another application")
+                        elif status == "error":
+                            self.menu_system.send_tts(f"Camera error: {data['error']}")
+                        else:
+                            self.menu_system.send_tts(f"Camera status: {status}")
+                    else:
+                        self.menu_system.send_tts(f"Camera error: {data['error']}")
+                else:
+                    self.menu_system.send_tts("Camera is working properly")
+            else:
+                self.menu_system.send_tts(f"Failed to get camera status, response code: {response.status_code}")
+        except Exception as e:
+            self.menu_system.send_tts(f"Error checking camera status: {str(e)}")
     
     def get_volume(self):
         try:
@@ -133,7 +195,7 @@ class MenuHandlers:
     def increase_tts_speed(self):
         try:
             current_speed = self.state_handler.get_state("tts_speed", 150)
-            new_speed = min(250, current_speed + 25)
+            new_speed = min(300, current_speed + 25)
             
             self.state_handler.set_state("tts_speed", new_speed)
             self.state_handler.save_state()

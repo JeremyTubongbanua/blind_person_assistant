@@ -41,7 +41,7 @@ class MenuSystem:
                 {"name": "Gyro Settings", "submenu": "gyro"},
                 {"name": "Camera Settings", "submenu": "camera"},
                 {"name": "Volume Settings", "submenu": "volume"},
-                {"name": "TTS Settings", "submenu": "tts"},
+                {"name": "Text To Speech Settings", "submenu": "tts"},
             ],
             "gyro": [
                 {"name": "Calibrate Gyros", "action": self.menu_handlers.calibrate_gyros},

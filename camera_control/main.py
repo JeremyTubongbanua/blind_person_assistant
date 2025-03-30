@@ -52,7 +52,7 @@ def start_service():
                           capture_output=True, text=True)
     
     if result.returncode == 0:
-        return jsonify({"status": "success", "message": "Camera stream service started"})
+        return jsonify({"status": "success", "message": "Camera stream service started"}), 200
     else:
         return jsonify({"status": "error", "message": result.stderr}), 500
 
@@ -63,7 +63,7 @@ def stop_service():
                           capture_output=True, text=True)
     
     if result.returncode == 0:
-        return jsonify({"status": "success", "message": "Camera stream service stopped"})
+        return jsonify({"status": "success", "message": "Camera stream service stopped"}), 200
     else:
         return jsonify({"status": "error", "message": result.stderr}), 500
 
@@ -74,7 +74,7 @@ def restart_service():
                           capture_output=True, text=True)
     
     if result.returncode == 0:
-        return jsonify({"status": "success", "message": "Camera stream service restarted"})
+        return jsonify({"status": "success", "message": "Camera stream service restarted"}), 200
     else:
         return jsonify({"status": "error", "message": result.stderr}), 500
 
