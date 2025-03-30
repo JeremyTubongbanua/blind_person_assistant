@@ -34,9 +34,9 @@ class MenuSystem:
         
         self.menus = {
             "main": [
-                {"name": "Announce Detections", "action": self.menu_handlers.announce_detections},
-                {"name": "Scan Sign", "action": self.menu_handlers.scan_sign},
+                {"name": "Narrate Detections", "action": self.menu_handlers.narrate_detections},
                 {"name": "Track Object", "action": self.menu_handlers.track_object},
+                {"name": "Scan Sign", "action": self.menu_handlers.scan_sign},
                 {"name": "Object Avoidance", "action": self.menu_handlers.object_avoidance},
                 {"name": "Gyro Settings", "submenu": "gyro"},
                 {"name": "Camera Settings", "submenu": "camera"},

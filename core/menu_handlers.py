@@ -45,15 +45,34 @@ class MenuHandlers:
         except Exception as e:
             self.mqtt_handler.publish_log(f"Error sending TTS request: {e}")
     
-    def announce_detections(self):
-        pass
-    
-    def scan_sign(self):
-        pass
+    def narrate_detections(self):
+        endpoint = 'http://localhost:8005/detections'
+        response = requests.get(endpoint)
+        sleep(0.1)
+        
+        if response.status_code == 200:
+            data = response.json()
+            num_detections = data.get('num_detections', 0)
+            detections = data.get('detections', [])
+            if num_detections > 0:
+                message = f"Detected {num_detections} objects: "
+                for detection in detections:
+                    label = detection.get('label', 'unknown')
+                    confidence = detection.get('confidence', 0)
+                    message += f"{label} with confidence {confidence:.2f}, "
+                message = message.rstrip(", ")
+                self.menu_system.send_tts(message)
+            else:
+                self.menu_system.send_tts("No objects detected.")
+        else: 
+            self.menu_system.send_tts(f"Error fetching detections: {response.status_code}")
     
     def track_object(self):
         pass
     
+    def scan_sign(self):
+        pass
+
     def object_avoidance(self):
         pass
     
