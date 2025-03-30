@@ -125,8 +125,11 @@ def on_rpi4_message(client, userdata, msg):
             socketio.emit(SOCKETIO_MQTT_MESSAGE, {'topic': topic, 'payload': msg.payload.decode()})
             
         elif topic == RPI4_TOPICS["detections"]:
-            last_messages[MESSAGE_CATEGORIES["CAMERA_DETECTIONS"]] = payload
-            socketio.emit(SOCKETIO_MQTT_UPDATE, {'topic': MESSAGE_CATEGORIES["CAMERA_DETECTIONS"], 'payload': payload})
+            if last_messages[MESSAGE_CATEGORIES["CAMERA_DETECTIONS"]] is None:
+                last_messages[MESSAGE_CATEGORIES["CAMERA_DETECTIONS"]] = {}
+            last_messages[MESSAGE_CATEGORIES["CAMERA_DETECTIONS"]]["detections"] = payload
+            socketio.emit(SOCKETIO_MQTT_MESSAGE, {'topic': topic, 'payload': payload})
+            print(f'emitted: {topic} {payload}')
             
         elif topic == RPI4_TOPICS["detection_image"]:
             if last_messages[MESSAGE_CATEGORIES["CAMERA_DETECTIONS"]] is None:

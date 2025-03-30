@@ -650,9 +650,11 @@
             'Cane Button State': { element: document.getElementById('caneButtonState'), status: document.getElementById('caneStatus') },
             'Gyro': { element: document.getElementById('gyro'), status: document.getElementById('gyroStatus') },
             'Vibration Motor Response': { element: document.getElementById('vibrationMotorResponse'), status: document.getElementById('vibrationResponseStatus') },
+            'Camera Detections Text': {element: document.getElementById('cameraDetectionsData'), status: document.getElementById('cameraDetectionsStatus') },
             'Camera Detections': { element: document.getElementById('cameraDetections'), status: document.getElementById('detectionsStatus') },
             'Headset Gyro': { element: document.getElementById('headsetGyro'), status: document.getElementById('headsetGyroStatus') },
             'Headset Vibration Motor Controller': { element: document.getElementById('headsetVibrationMotorController'), status: document.getElementById('headsetVibrationStatus') },
+
         };
 
         const rpi2ConnectionStatus = document.getElementById('rpi2ConnectionStatus');
@@ -810,8 +812,9 @@
                     }
                 } else if(data.topic == 'pi4/detections') {
                     try {
-                        const payload = JSON.parse(data.payload);
-                        updateDetections(payload);
+                        if (data.payload) {
+                            updateDetections(data.payload);
+                        }
                     } catch (e) {
                         console.error('Error parsing detections data:', e);
                     }
@@ -835,7 +838,7 @@
 
         function updateDetections(data) {
             const detectionsEl = document.getElementById('cameraDetectionsData');
-            const statusEl = document.getElementById('detectionsStatus');
+            const statusEl = document.getElementById('cameraDetectionsStatus');
             
             if (data && Object.keys(data).length > 0) {
                 detectionsEl.textContent = JSON.stringify(data, null, 2);
