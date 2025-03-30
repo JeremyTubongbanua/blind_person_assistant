@@ -1,10 +1,16 @@
-import requests
 import asyncio
 import subprocess
 import os
 import paho.mqtt.client as mqtt
 import json
 from time import sleep
+import requests
+import boto3
+import io
+from PIL import Image
+import csv
+from googletrans import Translator
+import base64
 
 SPEAKER_API_URL = "http://localhost:5001"
 TTS_URL = "http://localhost:5001/tts"
@@ -74,8 +80,84 @@ class MenuHandlers:
     def track_object(self):
         pass
     
-    def scan_sign(self):
-        pass
+    def scan_sign(self):        
+        try:
+            endpoint = 'http://localhost:8005/detections'
+            response = requests.get(endpoint)
+            
+            if response.status_code != 200:
+                self.menu_system.send_tts("Error fetching detections. Camera may be off.")
+                return
+            
+            data = response.json()
+            detections = data.get('detections', [])
+            
+            sign_detections = [d for d in detections if d.get('label') == 'general_sign']
+            
+            if not sign_detections:
+                self.menu_system.send_tts("No signs detected. Please point the camera at a sign.")
+                return
+            
+            self.menu_system.send_tts("Sign detected. Processing...")
+            
+            sign = sign_detections[0]
+            bbox = sign.get('bbox', {})
+            
+            img_data = base64.b64decode(data.get('detection_image', ''))
+            if not img_data:
+                self.menu_system.send_tts("Failed to get detection image.")
+                return
+            
+            img = Image.open(io.BytesIO(img_data))
+            
+            img_width, img_height = img.size
+            x1 = max(0, int(bbox.get('x1', 0)))
+            y1 = max(0, int(bbox.get('y1', 0)))
+            x2 = min(img_width, int(bbox.get('x2', 0)))
+            y2 = min(img_height, int(bbox.get('y2', 0)))
+            
+            if x2 <= x1 or y2 <= y1:
+                self.menu_system.send_tts("Invalid sign boundaries.")
+                return
+            
+            cropped_img = img.crop((x1, y1, x2, y2))
+            
+            try:
+                textract = boto3.client('textract', region_name='us-east-2')
+                img_byte_arr = io.BytesIO()
+                cropped_img.save(img_byte_arr, format='JPEG')
+                img_byte_arr = img_byte_arr.getvalue()
+                
+                textract_response = textract.detect_document_text(
+                    Document={'Bytes': img_byte_arr}
+                )
+                
+                extracted_text = ""
+                for item in textract_response['Blocks']:
+                    if item['BlockType'] == 'LINE':
+                        extracted_text += item['Text'] + " "
+                
+                if extracted_text.strip():
+                    self.menu_system.send_tts(f"Sign says: {extracted_text}")
+                    return
+            except Exception:
+                pass
+            
+            try:
+                import pytesseract
+                extracted_text = pytesseract.image_to_string(cropped_img)
+                
+                if extracted_text.strip():
+                    self.menu_system.send_tts(f"Sign says: {extracted_text}")
+                    return
+                else:
+                    self.menu_system.send_tts("No text found on the sign.")
+                    return
+            except Exception as e:
+                self.menu_system.send_tts(f"Error reading sign text: {str(e)}")
+                
+        except Exception as e:
+            self.menu_system.send_tts(f"Error scanning sign: {str(e)}")
 
     def object_avoidance(self):
         pass
