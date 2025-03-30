@@ -326,34 +326,34 @@ def text_to_speech():
     except Exception as e:
         return jsonify({"status": "error", "error": str(e)}), 500
 
-@app.route('/calibrate_headset_gyro', methods=['GET'])
+@app.route('/calibrate_headset_gyro', methods=['POST'])
 def calibrate_headset_gyro():
     try:
-        response = requests.get(HEADSET_CALIBRATION_ENDPOINT)
+        response = requests.post(HEADSET_CALIBRATION_ENDPOINT)
         return jsonify(response.json()), response.status_code
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
-@app.route('/zero_headset_gyro', methods=['GET'])
+@app.route('/zero_headset_gyro', methods=['POST'])
 def zero_headset_gyro():
     try:
-        response = requests.get(f"{HEADSET_ZERO_ENDPOINT}")
+        response = requests.post(f"{HEADSET_ZERO_ENDPOINT}")
         return jsonify(response.json()), response.status_code
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
-@app.route('/calibrate_cane_gyro', methods=['GET'])
+@app.route('/calibrate_cane_gyro', methods=['POST'])
 def calibrate_cane_gyro():
     try:
-        response = requests.get(CANE_CALIBRATION_ENDPOINT)
+        response = requests.post(CANE_CALIBRATION_ENDPOINT)
         return jsonify(response.json()), response.status_code
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
-@app.route('/zero_cane_gyro', methods=['GET'])
+@app.route('/zero_cane_gyro', methods=['POST'])
 def zero_cane_gyro():
     try:
-        response = requests.get(f"{CANE_ZERO_ENDPOINT}")
+        response = requests.post(f"{CANE_ZERO_ENDPOINT}")
         return jsonify(response.json()), response.status_code
     except Exception as e:
         return jsonify({"error": str(e)}), 500

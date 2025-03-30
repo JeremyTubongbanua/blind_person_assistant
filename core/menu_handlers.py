@@ -1,10 +1,9 @@
 import requests
 import asyncio
 import subprocess
-import subprocess
 import os
-import subprocess
-import os
+import paho.mqtt.client as mqtt
+import json
 
 SPEAKER_API_URL = "http://localhost:5001"
 TTS_URL = "http://localhost:5001/tts"
@@ -58,13 +57,83 @@ class MenuHandlers:
         pass
     
     def calibrate_gyros(self):
-        pass
+        try:
+            self.menu_system.send_tts("Please do not move the headset or the cane. Calibration is starting.")
+            response = requests.post("http://localhost:5002/calibrate")
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("status", False):
+                    self.menu_system.send_tts("Gyroscope calibration completed successfully.")
+                else:
+                    self.menu_system.send_tts(f"Gyroscope calibration failed: {data.get('error', 'Unknown error')}")
+            else:
+                self.menu_system.send_tts(f"Failed to calibrate gyroscope, response code: {response.status_code}")
+        except Exception as e:
+            self.menu_system.send_tts(f"Error during gyroscope calibration: {str(e)}")
     
     def narrate_gyro_values(self):
-        pass
+        def on_message(client, userdata, msg):
+            try:
+                payload = json.loads(msg.payload.decode('utf-8'))
+                gyro = payload.get("gyro", {})
+                accel = payload.get("accel", {})
+
+                gyro_x = gyro.get("x", 0)
+                gyro_y = gyro.get("y", 0)
+                gyro_z = gyro.get("z", 0)
+
+                accel_x = accel.get("x", 0)
+                accel_y = accel.get("y", 0)
+                accel_z = accel.get("z", 0)
+
+                message = (
+                    f"Gyro values are X: {gyro_x:.2f}, Y: {gyro_y:.2f}, Z: {gyro_z:.2f}. "
+                    f"Acceleration values are X: {accel_x:.2f}, Y: {accel_y:.2f}, Z: {accel_z:.2f}."
+                )
+                self.menu_system.send_tts(message)
+            except Exception as e:
+                self.menu_system.send_tts(f"Error processing gyro data: {str(e)}")
+            client.loop_stop()
+            client.disconnect()
+
+        client = mqtt.Client()
+        client.on_message = on_message
+
+        try:
+            client.connect("localhost", 1883, 60)
+            client.subscribe("pi4/gyro")
+            client.loop_start()
+        except Exception as e:
+            self.menu_system.send_tts(f"Error connecting to MQTT broker: {str(e)}")
     
     def narrate_pitch_yaw_roll(self):
-        pass
+        def on_message(client, userdata, msg):
+            try:
+                payload = json.loads(msg.payload.decode('utf-8'))
+                pitch = payload.get("pitch", 0)
+                yaw = payload.get("yaw", 0)
+                roll = payload.get("roll", 0)
+
+                message = (
+                    f"Pitch is {pitch:.2f} degrees, "
+                    f"Yaw is {yaw:.2f} degrees, "
+                    f"Roll is {roll:.2f} degrees."
+                )
+                self.menu_system.send_tts(message)
+            except Exception as e:
+                self.menu_system.send_tts(f"Error processing pitch, yaw, roll data: {str(e)}")
+            client.loop_stop()
+            client.disconnect()
+
+        client = mqtt.Client()
+        client.on_message = on_message
+
+        try:
+            client.connect("localhost", 1883, 60)
+            client.subscribe("pi4/pitch_yaw_roll")
+            client.loop_start()
+        except Exception as e:
+            self.menu_system.send_tts(f"Error connecting to MQTT broker: {str(e)}")
     
     def start_camera(self):
         try:

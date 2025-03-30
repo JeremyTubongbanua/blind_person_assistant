@@ -121,7 +121,7 @@ def on_message(client, userdata, msg):
     except Exception as e:
         print(f"Error processing message: {e}")
 
-@app.route('/calibrate', methods=['GET'])
+@app.route('/calibrate', methods=['POST'])
 def reset_calibration():
     global gyro_calibration, calibration_samples, is_calibrating, first_message, last_timestamp, gyro_integrated
     
@@ -141,12 +141,11 @@ def reset_calibration():
         "message": "Calibration complete."
     })
 
-@app.route('/zero', methods=['GET'])
+@app.route('/zero', methods=['POST'])
 def zero_orientation():
     global gyro_integrated, first_message, last_timestamp
     
     print("Zeroing pitch, yaw, and roll...")
-    # Reset integrated values but keep calibration
     gyro_integrated = {"roll": 0, "pitch": 0, "yaw": 0}
     first_message = True
     last_timestamp = 0

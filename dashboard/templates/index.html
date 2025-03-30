@@ -1296,7 +1296,7 @@
             statusArea.textContent = "Calibrating headset gyro... please wait";
             
             fetch('/calibrate_headset_gyro', {
-                method: 'GET'
+                method: 'POST'
             })
             .then(response => response.json())
             .then(data => {
@@ -1312,7 +1312,7 @@
             statusArea.textContent = "Zeroing headset gyro... please wait";
             
             fetch('/zero_headset_gyro', {
-                method: 'GET'
+                method: 'POST'
             })
             .then(response => response.json())
             .then(data => {
@@ -1328,7 +1328,7 @@
             statusArea.textContent = "Calibrating cane gyro... please wait";
             
             fetch('/calibrate_cane_gyro', {
-                method: 'GET'
+                method: 'POST'
             })
             .then(response => response.json())
             .then(data => {
@@ -1344,7 +1344,7 @@
             statusArea.textContent = "Zeroing cane gyro... please wait";
             
             fetch('/zero_cane_gyro', {
-                method: 'GET'
+                method: 'POST'
             })
             .then(response => response.json())
             .then(data => {
