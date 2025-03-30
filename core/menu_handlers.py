@@ -76,9 +76,75 @@ class MenuHandlers:
                 self.menu_system.send_tts("No objects detected.")
         else: 
             self.menu_system.send_tts(f"Error fetching detections: {response.status_code}")
-    
+
     def track_object(self):
-        pass
+        endpoint = 'http://localhost:8005/detections'
+        try:
+            response = requests.get(endpoint)
+        except Exception as e:
+            self.menu_system.send_tts(f"Camera is off or detection service is unavailable: {str(e)}")
+            return
+        
+        if response.status_code != 200:
+            self.menu_system.send_tts(f"Error fetching detections: {response.status_code}")
+            return
+        
+        data = response.json()
+        detections = data.get('detections', [])
+        
+        if not detections:
+            self.menu_system.send_tts("No objects detected. Point camera at objects to track.")
+            return
+        
+        all_messages = []
+        
+        for idx, detection in enumerate(detections):
+            label = detection.get('label', 'unknown')
+            confidence = detection.get('confidence', 0)
+            bbox = detection.get('bbox', {})
+            distance = detection.get('distance', 0)
+            
+            if not bbox:
+                continue
+            
+            x1 = float(bbox.get('x1', 0))
+            y1 = float(bbox.get('y1', 0))
+            x2 = float(bbox.get('x2', 0))
+            y2 = float(bbox.get('y2', 0))
+            
+            image_width = 320  
+            image_height = 320
+            
+            center_x = (x1 + x2) / 2 / image_width
+            center_y = (y1 + y2) / 2 / image_height
+            
+            message = f"{label} at confidence {confidence:.2f}"
+            
+            if center_x < 0.33:
+                horizontal_pos = "left"
+            elif center_x < 0.66:
+                horizontal_pos = "center"
+            else:
+                horizontal_pos = "right"
+                
+            if center_y < 0.33:
+                vertical_pos = "top"
+            elif center_y < 0.66:
+                vertical_pos = "middle"
+            else:
+                vertical_pos = "bottom"
+            
+            message += f" located at {vertical_pos} {horizontal_pos} of frame"
+            
+            if distance > 0:
+                message += f" approximately {distance:.1f} meters away"
+                
+            all_messages.append(message)
+        
+        if all_messages:
+            self.menu_system.send_tts(f"Tracking {len(all_messages)} objects. {'. '.join(all_messages)}")
+        else:
+            self.menu_system.send_tts("No valid objects detected for tracking.")
     
     def scan_sign(self):        
         try:
