@@ -45,6 +45,7 @@ class MenuSystem:
             ],
             "gyro": [
                 {"name": "Calibrate Gyros", "action": self.menu_handlers.calibrate_gyros},
+                {"name": "Zero Pitch Yaw Roll", "action": self.menu_handlers.zero_pitch_yaw_roll},
                 {"name": "Narrate Gyro Values", "action": self.menu_handlers.narrate_gyro_values},
                 {"name": "Narrate Pitch Yaw Roll", "action": self.menu_handlers.narrate_pitch_yaw_roll},
                 {"name": "Back to Main Menu", "submenu": "main"}

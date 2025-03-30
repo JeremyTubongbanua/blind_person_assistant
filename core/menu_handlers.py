@@ -4,6 +4,7 @@ import subprocess
 import os
 import paho.mqtt.client as mqtt
 import json
+from time import sleep
 
 SPEAKER_API_URL = "http://localhost:5001"
 TTS_URL = "http://localhost:5001/tts"
@@ -59,17 +60,59 @@ class MenuHandlers:
     def calibrate_gyros(self):
         try:
             self.menu_system.send_tts("Please do not move the headset or the cane. Calibration is starting.")
+            # First API call (Headset)
             response = requests.post("http://localhost:5002/calibrate")
             if response.status_code == 200:
                 data = response.json()
                 if data.get("status", False):
-                    self.menu_system.send_tts("Gyroscope calibration completed successfully.")
+                    self.menu_system.send_tts("Gyroscope calibration on the headset completed successfully.")
                 else:
-                    self.menu_system.send_tts(f"Gyroscope calibration failed: {data.get('error', 'Unknown error')}")
+                    self.menu_system.send_tts(f"Gyroscope calibration on the headset failed: {data.get('error', 'Unknown error')}")
             else:
-                self.menu_system.send_tts(f"Failed to calibrate gyroscope, response code: {response.status_code}")
+                self.menu_system.send_tts(f"Failed to calibrate gyroscope on the headset, response code: {response.status_code}")
+            
+            # Second API call (Smart Cane)
+            response = requests.post("http://192.168.2.219:5002/calibrate")
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("status", False):
+                    self.menu_system.send_tts("Gyroscope calibration on the smart cane completed successfully.")
+                else:
+                    self.menu_system.send_tts(f"Gyroscope calibration on the smart cane failed: {data.get('error', 'Unknown error')}")
+            else:
+                self.menu_system.send_tts(f"Failed to calibrate gyroscope on the smart cane, response code: {response.status_code}")
         except Exception as e:
             self.menu_system.send_tts(f"Error during gyroscope calibration: {str(e)}")
+    
+    def zero_pitch_yaw_roll(self):
+        try:
+            self.menu_system.send_tts("Zeroing pitch, yaw, and roll. Please hold the device steady.")
+            
+            # First API call (Headset)
+            response = requests.post("http://localhost:5002/zero")
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("status", False):
+                    self.menu_system.send_tts("Pitch, yaw, and roll on the headset have been zeroed successfully.")
+                else:
+                    self.menu_system.send_tts(f"Failed to zero pitch, yaw, and roll on the headset: {data.get('error', 'Unknown error')}")
+            else:
+                self.menu_system.send_tts(f"Failed to zero pitch, yaw, and roll on the headset, response code: {response.status_code}")
+            
+            sleep(3)
+            
+            # Second API call (Smart Cane)
+            response = requests.post("http://192.168.2.219:5002/zero")
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("status", False):
+                    self.menu_system.send_tts("Pitch, yaw, and roll on the smart cane have been zeroed successfully.")
+                else:
+                    self.menu_system.send_tts(f"Failed to zero pitch, yaw, and roll on the smart cane: {data.get('error', 'Unknown error')}")
+            else:
+                self.menu_system.send_tts(f"Failed to zero pitch, yaw, and roll on the smart cane, response code: {response.status_code}")
+        except Exception as e:
+            self.menu_system.send_tts(f"Error during zeroing pitch, yaw, and roll: {str(e)}")
     
     def narrate_gyro_values(self):
         def on_message(client, userdata, msg):
