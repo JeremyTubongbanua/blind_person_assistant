@@ -47,8 +47,12 @@ class MenuHandlers:
     
     def narrate_detections(self):
         endpoint = 'http://localhost:8005/detections'
-        response = requests.get(endpoint)
-        sleep(0.1)
+        try:
+            response = requests.get(endpoint)
+        except:
+            self.menu_system.send_tts("Camera is off. Turn it on in Camera Settings.")
+            return
+        sleep(0.05)
         
         if response.status_code == 200:
             data = response.json()

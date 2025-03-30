@@ -218,7 +218,7 @@ class MenuSystem:
         current_item = items[self.current_menu_index]
         current_option = current_item["name"]
         option_index = self.current_menu_index + 1
-        self.send_tts(f"Selected {current_option}")
+        # self.send_tts(f"Selected {current_option}")
         self.mqtt_handler.publish_log(f"Selected option {option_index}: {current_option}")
         
         if "submenu" in current_item:
@@ -240,7 +240,7 @@ class MenuSystem:
                     self.in_menu = True
                 except Exception as e:
                     self.mqtt_handler.publish_log(f"Error executing action: {e}")
-                    self.send_tts(f"Error executing action")
+                    # self.send_tts(f"Error executing action")
                     self.in_menu = True
 
     def init_mqtt(self):
