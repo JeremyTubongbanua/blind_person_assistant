@@ -5,6 +5,7 @@ import subprocess
 import re
 import tempfile
 import threading
+from time import sleep
 
 app = Flask(__name__)
 
@@ -244,6 +245,7 @@ def api_card_info():
         return jsonify({"error": f"Error getting card info: {e}"}), 500
 
 if __name__ == '__main__':
+    sleep(1)
     os.makedirs(AUDIO_FILES_DIR, exist_ok=True)
     
     detect_usb_speaker()

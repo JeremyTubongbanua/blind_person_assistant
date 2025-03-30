@@ -192,7 +192,11 @@ class MenuSystem:
         if 0 <= subscriber_id < len(self.button_subscribers):
             self.button_subscribers[subscriber_id] = None
 
-    def on_connect(self, client, userdata, flags, rc):
+    def on_connect(self, client, userdata, flags, rc, properties=None):
+        """
+        Callback for when the client connects to the broker.
+        Note: Added properties parameter with default None to handle both API versions.
+        """
         self.mqtt_handler.publish_log(f"Connected with result code {rc}")
         client.subscribe(MQTT_TOPIC)
         self.send_tts("Menu system connected. Use button 2 to cycle through options, button 1 to select.")
@@ -294,7 +298,7 @@ class MenuSystem:
 
     def init_mqtt(self):
         client = self.mqtt_handler.connect(
-            lambda client, userdata, flags, rc: self.on_connect(client, userdata, flags, rc),
+            lambda client, userdata, flags, rc, properties=None: self.on_connect(client, userdata, flags, rc, properties),
             lambda client, userdata, msg: self.on_message(client, userdata, msg)
         )
         

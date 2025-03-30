@@ -29,7 +29,9 @@ RPI4_TOPICS = {
     "pitch_yaw_roll": "pi4/pitch_yaw_roll",
     "detections": "pi4/detections",
     "detection_image": "pi4/detection_image",
-    "depth_map": "pi4/depth_map"
+    "depth_map": "pi4/depth_map",
+    "menu": "pi4/menu",
+    "menu_logs": "pi4/menu_logs"
 }
 
 MESSAGE_CATEGORIES = {
@@ -39,7 +41,9 @@ MESSAGE_CATEGORIES = {
     "CAMERA_DETECTIONS": "Camera Detections",
     "HEADSET_GYRO": "Headset Gyro",
     "HEADSET_VIBRATION_MOTOR_CONTROLLER": "Headset Vibration Motor Controller",
-    "PITCH_YAW_ROLL": "Pitch Yaw Roll"
+    "PITCH_YAW_ROLL": "Pitch Yaw Roll",
+    "MENU": "Menu",
+    "MENU_LOGS": "Menu Logs"
 }
 
 CAMERA_CONTROL_API_URL = "http://localhost:8010"
@@ -142,8 +146,16 @@ def on_rpi4_message(client, userdata, msg):
                 last_messages[MESSAGE_CATEGORIES["CAMERA_DETECTIONS"]] = {}
             last_messages[MESSAGE_CATEGORIES["CAMERA_DETECTIONS"]]["depth_map"] = payload
             socketio.emit(SOCKETIO_MQTT_MESSAGE, {'topic': topic, 'payload': msg.payload.decode()})
+        
+        elif topic == RPI4_TOPICS["menu"]:
+            last_messages[MESSAGE_CATEGORIES["MENU"]] = payload
+            socketio.emit(SOCKETIO_MQTT_UPDATE, {'topic': MESSAGE_CATEGORIES["MENU"], 'payload': payload})
+            socketio.emit(SOCKETIO_MQTT_MESSAGE, {'topic': topic, 'payload': msg.payload.decode()})
             
-            
+        elif topic == RPI4_TOPICS["menu_logs"]:
+            last_messages[MESSAGE_CATEGORIES["MENU_LOGS"]] = payload
+            socketio.emit(SOCKETIO_MQTT_UPDATE, {'topic': MESSAGE_CATEGORIES["MENU_LOGS"], 'payload': payload})
+            socketio.emit(SOCKETIO_MQTT_MESSAGE, {'topic': topic, 'payload': msg.payload.decode()})
     
     except Exception as e:
         print(f"Error processing rpi4 message from {topic}: {e}")
