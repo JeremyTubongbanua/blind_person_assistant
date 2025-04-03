@@ -12,6 +12,7 @@ import csv
 import os
 
 TTS_URL = "http://localhost:5001/tts"
+VIBRATION_URL = "http://localhost:5000/vibrate"
 MQTT_BROKER = "192.168.2.219"
 MQTT_PORT = 1883
 MQTT_TOPIC = "pi2/button_state"
@@ -123,6 +124,27 @@ class MenuSystem:
         
         self.menu_history = []
 
+    def vibrate_motors(self, seconds=0.1, left_duration=0, right_duration=0):
+        try:
+            if left_duration > 0 or right_duration > 0:
+                payload = {
+                    "left_duration": left_duration,
+                    "right_duration": right_duration
+                }
+                response = requests.post(VIBRATION_URL, json=payload)
+                if response.status_code != 200:
+                    self.mqtt_handler.publish_log(f"Vibration request failed with status code {response.status_code}")
+            else:
+                payload = {
+                    "left_duration": seconds,
+                    "right_duration": seconds
+                }
+                response = requests.post(VIBRATION_URL, json=payload)
+                if response.status_code != 200:
+                    self.mqtt_handler.publish_log(f"Vibration request failed with status code {response.status_code}")
+        except Exception as e:
+            self.mqtt_handler.publish_log(f"Error sending vibration request: {e}")
+
     def publish_menu_structure(self):
         current_items = self.get_current_menu_items()
         menu_structure = self.mqtt_handler.format_menu_structure(
@@ -193,10 +215,6 @@ class MenuSystem:
             self.button_subscribers[subscriber_id] = None
 
     def on_connect(self, client, userdata, flags, rc, properties=None):
-        """
-        Callback for when the client connects to the broker.
-        Note: Added properties parameter with default None to handle both API versions.
-        """
         self.mqtt_handler.publish_log(f"Connected with result code {rc}")
         client.subscribe(MQTT_TOPIC)
         self.send_tts("Menu system connected. Use button 2 to cycle through options, button 1 to select.")
@@ -259,6 +277,7 @@ class MenuSystem:
         current_option = self.get_current_menu_option()
         option_index = self.current_menu_index + 1
         self.send_tts(f"option {option_index}: {current_option}")
+        self.vibrate_motors(left_duration=0.1, right_duration=0.1)
         self.mqtt_handler.publish_log(f"Current menu option: {option_index}: {current_option}")
         self.publish_menu_structure()
 
@@ -271,7 +290,6 @@ class MenuSystem:
         current_item = items[self.current_menu_index]
         current_option = current_item["name"]
         option_index = self.current_menu_index + 1
-        # self.send_tts(f"Selected {current_option}")
         self.mqtt_handler.publish_log(f"Selected option {option_index}: {current_option}")
         
         if "submenu" in current_item:
@@ -293,7 +311,6 @@ class MenuSystem:
                     self.in_menu = True
                 except Exception as e:
                     self.mqtt_handler.publish_log(f"Error executing action: {e}")
-                    # self.send_tts(f"Error executing action")
                     self.in_menu = True
 
     def init_mqtt(self):
