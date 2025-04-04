@@ -166,12 +166,114 @@ class MenuOptionHandler:
         except Exception as e:
             self.menu_system.send_tts_configured(f"Error during object tracking: {str(e)}")
         finally:
+            self.menu_system.set_default_button_callbacks()        
+
+    def object_avoidance(self):
+        response = camera_detections()
+        if response.status_code != 200:
+            self.menu_system.send_tts_configured(f"Error fetching detections: {response.status_code}")
+            return
+        
+        data = response.json()
+        detections = data.get('detections', [])
+        
+        if not detections:
+            self.menu_system.send_tts_configured("No objects detected. Point camera at surroundings to detect objects.")
+            return
+        
+        num_detections = len(detections)
+        self.menu_system.send_tts_configured(f"{num_detections} objects detected. Starting object avoidance mode.")
+        
+        zero_pyr_cane()
+        zero_pyr_headset()
+        
+        import math
+        camera_width = 320
+        camera_height = 320
+        camera_center_x = camera_width / 2
+        camera_center_y = camera_height / 2
+        
+        def get_object_positions():
+            response = camera_detections()
+            if response.status_code != 200:
+                return []
+            
+            data = response.json()
+            detections = data.get('detections', [])
+            
+            object_positions = []
+            for detection in detections:
+                bbox = detection.get('bbox', {})
+                if bbox:
+                    x1, x2 = bbox.get('x1', 0), bbox.get('x2', 0)
+                    y1, y2 = bbox.get('y1', 0), bbox.get('y2', 0)
+                    center_x = (x1 + x2) / 2
+                    center_y = (y1 + y2) / 2
+                    
+                    pixel_offset_x = center_x - camera_center_x
+                    ndc_x = pixel_offset_x / camera_center_x
+                    
+                    horizontal_fov_half = math.radians(31)
+                    horizontal_angle = math.degrees(math.atan(math.tan(horizontal_fov_half) * ndc_x))
+                    
+                    distance = detection.get('distance', 0)
+                    
+                    object_positions.append({
+                        'angle': horizontal_angle,
+                        'distance': distance,
+                        'label': detection.get('label', 'unknown')
+                    })
+            
+            return object_positions
+        
+        def cancel_avoidance_callback():
+            nonlocal avoidance_active
+            avoidance_active = False
+            self.menu_system.send_tts_configured("Object avoidance canceled.")
             self.menu_system.set_default_button_callbacks()
         
-
+        self.menu_system.button_state.set_left_press_callback(cancel_avoidance_callback)
         
-    def object_avoidance(self):
-        pass
+        avoidance_active = True
+        last_report_time = 0
+        
+        while avoidance_active:
+            try:
+                objects = get_object_positions()
+                headset_pyr = self.menu_system.headset_pyr_state.get_pyr_state()
+                cane_pyr = self.menu_system.cane_pyr_state.get_pyr_state()
+                cane_yaw = cane_pyr.get('yaw', 0)
+                
+                for obj in objects:
+                    angle = obj['angle']
+                    distance = obj['distance']
+                    
+                    relative_angle = angle - cane_yaw
+                    
+                    if distance < 2.0 and abs(relative_angle) <= 10:
+                        if relative_angle < -5:
+                            vibrate_cane_motors(left_duration=0.3, right_duration=0)
+                        elif relative_angle > 5:
+                            vibrate_cane_motors(left_duration=0, right_duration=0.3)
+                        else:
+                            vibrate_cane_motors(left_duration=0.3, right_duration=0.3)
+                    
+                    current_time = time.time()
+                    if current_time - last_report_time > 5:
+                        closest_obj = min(objects, key=lambda x: x['distance']) if objects else None
+                        if closest_obj:
+                            direction = "right" if closest_obj['angle'] > 0 else "left"
+                            self.menu_system.send_tts_configured(
+                                f"Closest object is {closest_obj['label']}, {closest_obj['distance']:.1f} meters away to your {direction}."
+                            )
+                            last_report_time = current_time
+                        
+                sleep(0.2)
+            except Exception as e:
+                self.menu_system.send_tts_configured(f"Error in object avoidance: {str(e)}")
+                break
+        
+        self.menu_system.set_default_button_callbacks()
     
     def scan_sign(self):        
         try:
