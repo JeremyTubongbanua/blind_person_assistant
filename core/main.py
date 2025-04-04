@@ -1,299 +1,278 @@
-import requests
 import json
 import time
 import threading
-import queue
 import paho.mqtt.client as mqtt
-from menu_handlers import MenuHandlers
+from menu_option_handler import MenuOptionHandler
 from state_handler import StateHandler
-from googletrans import Translator
 from credentials import get_aws_credentials
-import csv
-import os
+from util import send_tts, vibrate_cane_motors
 
-TTS_URL = "http://localhost:5001/tts"
-VIBRATION_URL = "http://localhost:5000/vibrate"
-MQTT_BROKER = "192.168.2.219"
-MQTT_PORT = 1883
-MQTT_TOPIC = "pi2/button_state"
+class ButtonState:
+    def __init__(self, MQTT_HOST='192.168.2.219', MQTT_PORT=1883, MQTT_TOPIC='pi2/button_state'):
+        self.MQTT_HOST = MQTT_HOST
+        self.MQTT_PORT = MQTT_PORT
+        self.MQTT_TOPIC = MQTT_TOPIC
+        self.button_state = {'button1': False, 'button2': False, 'timestamp': 0}
+        self.mqtt_client = mqtt.Client()
+        self.mqtt_client.on_connect = self.on_connect
+        self.mqtt_client.on_message = self.on_message
+        self.right_press_callback = None
+        self.left_press_callback = None
+        self.debounce_time = 0.3  # 300ms debounce
+        self.last_right_press_time = 0
+        self.last_left_press_time = 0
 
+        try:
+            self.mqtt_client.connect(self.MQTT_HOST, self.MQTT_PORT, 60)
+            mqtt_thread = threading.Thread(target=self.mqtt_client.loop_forever, daemon=True)
+            mqtt_thread.start()
+        except Exception as e:
+            print(f"Error initializing MQTT client: {e}")
+
+    def on_connect(self, client, userdata, flags, rc):
+        print(f"Connected to MQTT broker with result code {rc}")
+        client.subscribe(self.MQTT_TOPIC)
+
+    def on_message(self, client, userdata, msg):
+        try:
+            payload = json.loads(msg.payload.decode())
+            prev_button_state = self.button_state.copy()
+            self.button_state = payload
+            # print(f"Received button state: {self.button_state}")
+
+            current_time = time.time()
+
+            if self.button_state['button2'] and not prev_button_state['button2']:
+                if current_time - self.last_right_press_time > self.debounce_time:
+                    self.last_right_press_time = current_time
+                    if self.right_press_callback:
+                        threading.Thread(target=self.right_press_callback, daemon=True).start()
+
+            if self.button_state['button1'] and not prev_button_state['button1']:
+                if current_time - self.last_left_press_time > self.debounce_time:
+                    self.last_left_press_time = current_time
+                    if self.left_press_callback:
+                        threading.Thread(target=self.left_press_callback, daemon=True).start()
+
+        except json.JSONDecodeError:
+            print(f"Error decoding JSON: {msg.payload}")
+        except Exception as e:
+            print(f"Error processing MQTT message: {e}")
+
+    def set_right_press_callback(self, callback):
+        self.right_press_callback = callback
+
+    def set_left_press_callback(self, callback):
+        self.left_press_callback = callback
+
+    def get_button_state(self):
+        return self.button_state
+
+class PYRState:
+    def __init__(self, MQTT_HOST='192.168.2.219', MQTT_PORT=1883, MQTT_TOPIC='pi2/pitch_yaw_roll'):
+        self.pyr_state = {'pitch': 0, 'yaw': 0, 'roll': 0}
+        self.MQTT_HOST = MQTT_HOST
+        self.MQTT_PORT = MQTT_PORT
+        self.MQTT_TOPIC = MQTT_TOPIC
+        self.mqtt_client = mqtt.Client()
+        self.mqtt_client.on_connect = self.on_connect
+        self.mqtt_client.on_message = self.on_message
+
+        try:
+            self.mqtt_client.connect(self.MQTT_HOST, self.MQTT_PORT, 60)
+            mqtt_thread = threading.Thread(target=self.mqtt_client.loop_forever, daemon=True)
+            mqtt_thread.start()
+        except Exception as e:
+            print(f"Error initializing MQTT client for Cane PYR state: {e}")
+
+    def on_connect(self, client, userdata, flags, rc):
+        print(f"Connected to MQTT broker for Cane PYR state with result code {rc}")
+        client.subscribe(self.MQTT_TOPIC)
+
+    def on_message(self, client, userdata, msg):
+        try:
+            payload = json.loads(msg.payload.decode())
+            self.pyr_state = payload
+            # print(f"Received Cane PYR state: {self.pyr_state}")
+        except json.JSONDecodeError:
+            print(f"Error decoding JSON for Cane PYR state: {msg.payload}")
+        except Exception as e:
+            print(f"Error processing MQTT message for Cane PYR state: {e}")
+
+    def get_pyr_state(self):
+        return self.pyr_state
+
+class ButtonState:
+    def __init__(self, MQTT_HOST='192.168.2.219', MQTT_PORT=1883, MQTT_TOPIC='pi2/button_state'):
+        self.MQTT_HOST = MQTT_HOST
+        self.MQTT_PORT = MQTT_PORT
+        self.MQTT_TOPIC = MQTT_TOPIC
+        self.button_state = {'button1': False, 'button2': False, 'timestamp': 0}
+        self.mqtt_client = mqtt.Client()
+        self.mqtt_client.on_connect = self.on_connect
+        self.mqtt_client.on_message = self.on_message
+        self.right_press_callback = None
+        self.left_press_callback = None
+        self.debounce_time = 0.3  # 300ms debounce
+        self.last_right_press_time = 0
+        self.last_left_press_time = 0
+
+        try:
+            self.mqtt_client.connect(self.MQTT_HOST, self.MQTT_PORT, 60)
+            mqtt_thread = threading.Thread(target=self.mqtt_client.loop_forever, daemon=True)
+            mqtt_thread.start()
+        except Exception as e:
+            print(f"Error initializing MQTT client: {e}")
+
+    def on_connect(self, client, userdata, flags, rc):
+        print(f"Connected to MQTT broker with result code {rc}")
+        client.subscribe(self.MQTT_TOPIC)
+
+    def on_message(self, client, userdata, msg):
+        try:
+            payload = json.loads(msg.payload.decode())
+            prev_button_state = self.button_state.copy()
+            self.button_state = payload
+            # print(f"Received button state: {self.button_state}")
+
+            current_time = time.time()
+
+            if self.button_state['button2'] and not prev_button_state['button2']:
+                if current_time - self.last_right_press_time > self.debounce_time:
+                    self.last_right_press_time = current_time
+                    if self.right_press_callback:
+                        threading.Thread(target=self.right_press_callback, daemon=True).start()
+
+            if self.button_state['button1'] and not prev_button_state['button1']:
+                if current_time - self.last_left_press_time > self.debounce_time:
+                    self.last_left_press_time = current_time
+                    if self.left_press_callback:
+                        threading.Thread(target=self.left_press_callback, daemon=True).start()
+
+        except json.JSONDecodeError:
+            print(f"Error decoding JSON: {msg.payload}")
+        except Exception as e:
+            print(f"Error processing MQTT message: {e}")
+
+    def set_right_press_callback(self, callback):
+        self.right_press_callback = callback
+
+    def set_left_press_callback(self, callback):
+        self.left_press_callback = callback
+
+    def get_button_state(self):
+        return self.button_state
+            
 class MenuSystem:
     def __init__(self, state_handler):
         self.state_handler = state_handler
-        self.button_state = {"button1": False, "button2": False, "timestamp": 0}
-        self.button_event_queue = queue.Queue()
-        self.button_subscribers = []
-        self.running = True
-        self.in_menu = True
+                
         self.current_menu = "main"
         self.current_menu_index = 0
-        self.tts_speed = self.state_handler.get_state("tts_speed", 150)
-        self.tts_voice = self.state_handler.get_state("tts_voice", "en-US-Neural2-F")
-        self.tts_language = self.state_handler.get_state("tts_language", "en-US")
-        self.mqtt_client = None
         
-        self.menu_handlers = MenuHandlers(self, state_handler)
+        self.menu_option_handler = MenuOptionHandler(self, state_handler)
         
         self.menus = {
             "main": [
-                {"name": "Narrate Detections", "action": self.menu_handlers.narrate_detections},
-                {"name": "Track Object", "action": self.menu_handlers.track_object},
-                {"name": "Object Avoidance", "action": self.menu_handlers.object_avoidance},
-                {"name": "Scan Sign", "action": self.menu_handlers.scan_sign},
+                {"name": "Narrate Detections", "action": self.menu_option_handler.narrate_detections},
+                {"name": "Track Object", "action": self.menu_option_handler.track_object},
+                {"name": "Object Avoidance", "action": self.menu_option_handler.object_avoidance},
+                {"name": "Scan Sign", "action": self.menu_option_handler.scan_sign},
                 {"name": "Gyro Settings", "submenu": "gyro"},
                 {"name": "Camera Settings", "submenu": "camera"},
                 {"name": "Volume Settings", "submenu": "volume"},
                 {"name": "Text To Speech Settings", "submenu": "tts"},
             ],
             "gyro": [
-                {"name": "Calibrate Gyros", "action": self.menu_handlers.calibrate_gyros},
-                {"name": "Zero Pitch Yaw Roll", "action": self.menu_handlers.zero_pitch_yaw_roll},
-                {"name": "Narrate Gyro Values", "action": self.menu_handlers.narrate_gyro_values},
-                {"name": "Narrate Pitch Yaw Roll", "action": self.menu_handlers.narrate_pitch_yaw_roll},
+                {"name": "Calibrate Gyros", "action": self.menu_option_handler.calibrate_gyros},
+                {"name": "Zero Pitch Yaw Roll", "action": self.menu_option_handler.zero_pitch_yaw_roll},
+                {"name": "Narrate Gyro Values", "action": self.menu_option_handler.narrate_gyro_values},
+                {"name": "Narrate Pitch Yaw Roll", "action": self.menu_option_handler.narrate_pitch_yaw_roll},
                 {"name": "Back to Main Menu", "submenu": "main"}
             ],
             "camera": [
-                {"name": "Start Camera", "action": self.menu_handlers.start_camera},
-                {"name": "Stop Camera", "action": self.menu_handlers.stop_camera},
-                {"name": "Restart Camera", "action": self.menu_handlers.restart_camera},
-                {"name": "Camera Status", "action": self.menu_handlers.camera_status},
+                {"name": "Start Camera", "action": self.menu_option_handler.start_camera},
+                {"name": "Stop Camera", "action": self.menu_option_handler.stop_camera},
+                {"name": "Restart Camera", "action": self.menu_option_handler.restart_camera},
+                {"name": "Camera Status", "action": self.menu_option_handler.camera_status},
                 {"name": "Back to Main Menu", "submenu": "main"}
             ],
             "volume": [
-                {"name": "Get Volume", "action": self.menu_handlers.get_volume},
-                {"name": "Decrease Volume by 10", "action": self.menu_handlers.decrease_volume},
-                {"name": "Increase Volume by 10", "action": self.menu_handlers.increase_volume},
+                {"name": "Get Volume", "action": self.menu_option_handler.get_volume},
+                {"name": "Decrease Volume by 10", "action": self.menu_option_handler.decrease_volume},
+                {"name": "Increase Volume by 10", "action": self.menu_option_handler.increase_volume},
                 {"name": "Back to Main Menu", "submenu": "main"}
             ],
             "tts": [
-                {"name": "Increase Text To Speech Speed by 25", "action": self.menu_handlers.increase_tts_speed},
-                {"name": "Decrease Text To Speech Speed by 25", "action": self.menu_handlers.decrease_tts_speed},
-                {"name": "Change Language to English", "action": self.menu_handlers.set_language_to_english},
-                {"name": "Change Language to French", "action": self.menu_handlers.set_language_to_french},
+                {"name": "Increase Text To Speech Speed by 25", "action": self.menu_option_handler.increase_tts_speed},
+                {"name": "Decrease Text To Speech Speed by 25", "action": self.menu_option_handler.decrease_tts_speed},
+                {"name": "Change Language to English", "action": self.menu_option_handler.set_language_to_english},
+                {"name": "Change Language to French", "action": self.menu_option_handler.set_language_to_french},
                 {"name": "Back to Main Menu", "submenu": "main"}
             ]
         }
         
-        self.menu_history = []
-
-    def vibrate_motors(self, seconds=0.1, left_duration=0, right_duration=0):
-        try:
-            if left_duration > 0 or right_duration > 0:
-                payload = {
-                    "left_duration": left_duration,
-                    "right_duration": right_duration
-                }
-                response = requests.post(VIBRATION_URL, json=payload)
-                if response.status_code != 200:
-                    print(f"Vibration request failed with status code {response.status_code}")
-            else:
-                payload = {
-                    "left_duration": seconds,
-                    "right_duration": seconds
-                }
-                response = requests.post(VIBRATION_URL, json=payload)
-                if response.status_code != 200:
-                    print(f"Vibration request failed with status code {response.status_code}")
-        except Exception as e:
-            print(f"Error sending vibration request: {e}")
-
-    def send_tts(self, text, speed=None, voice_name=None):
-        if speed is None:
-            speed = self.tts_speed
-        if voice_name is None:
-            voice_name = self.tts_language
-            
-        try:
-            if voice_name and voice_name.lower() == "fr-fr":
-                try:
-                    translator = Translator()
-                    
-                    import asyncio
-                    try:
-                        loop = asyncio.get_event_loop()
-                    except RuntimeError:
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
-                    
-                    translated = loop.run_until_complete(translator.translate(text, dest='fr'))
-                    
-                    text = translated.text
-                    print(f"Translated to French: {text}")
-                except Exception as e:
-                    print(f"Translation error: {e}, using original text")
-                
-            url = f"{TTS_URL}?text={text}&speed={speed}&voice_name={voice_name}"
-            response = requests.get(url)
-            if response.status_code != 200:
-                print(f"TTS request failed with status code {response.status_code}")
-        except Exception as e:
-            print(f"Error sending TTS request: {e}")
-            
-    def button_event_worker(self):
-        while self.running:
-            try:
-                event_data = self.button_event_queue.get(timeout=0.5)
-                if event_data:
-                    button, event = event_data
-                    print(f"Processing event: {button} {event}")
-                    for subscriber in self.button_subscribers:
-                        if subscriber:
-                            try:
-                                subscriber(button, event)
-                            except Exception as e:
-                                print(f"Error in button subscriber: {e}")
-                self.button_event_queue.task_done()
-            except queue.Empty:
-                pass
-            except Exception as e:
-                print(f"Error in button event worker: {e}")
-
-    def subscribe_to_buttons(self, callback):
-        self.button_subscribers.append(callback)
-        return len(self.button_subscribers) - 1
-
-    def unsubscribe_from_buttons(self, subscriber_id):
-        if 0 <= subscriber_id < len(self.button_subscribers):
-            self.button_subscribers[subscriber_id] = None
-
-    def on_connect(self, client, userdata, flags, rc, properties=None):
-        print(f"Connected with result code {rc}")
-        client.subscribe(MQTT_TOPIC)
-        self.send_tts("Menu system connected. Use button 2 to cycle through options, button 1 to select.")
-
-    def on_message(self, client, userdata, msg):
-        try:
-            payload = json.loads(msg.payload.decode())
-            
-            prev_button1 = self.button_state["button1"]
-            prev_button2 = self.button_state["button2"]
-            
-            self.button_state = payload
-            
-            print(f"MQTT: B1: {prev_button1}->{self.button_state['button1']}, B2: {prev_button2}->{self.button_state['button2']}")
-            
-            if self.button_state["button1"] and not prev_button1:
-                print("Queuing button1 pressed event")
-                self.button_event_queue.put(("button1", "pressed"))
-                if self.in_menu:
-                    self.select_current_option()
-            elif not self.button_state["button1"] and prev_button1:
-                print("Queuing button1 released event")
-                self.button_event_queue.put(("button1", "released"))
-                
-            if self.button_state["button2"] and not prev_button2:
-                print("Queuing button2 pressed event")
-                self.button_event_queue.put(("button2", "pressed"))
-                if self.in_menu:
-                    self.cycle_menu()
-            elif not self.button_state["button2"] and prev_button2:
-                print("Queuing button2 released event")
-                self.button_event_queue.put(("button2", "released"))
-            
-        except json.JSONDecodeError:
-            print(f"Error decoding JSON: {msg.payload}")
-        except Exception as e:
-            print(f"Error processing message: {e}")
-
-    def get_current_menu_items(self):
-        return self.menus.get(self.current_menu, [])
-
-    def get_current_menu_option(self):
-        items = self.get_current_menu_items()
-        if not items:
-            return "No options available"
+        self.button_state = ButtonState()
+        self.button_state.set_right_press_callback(self.handle_right_button)
+        self.button_state.set_left_press_callback(self.handle_left_button)
+        self.tts_speed = self.state_handler.get_state('tts_speed')
+        self.voice_name = self.state_handler.get_state('voice_name')
         
-        if 0 <= self.current_menu_index < len(items):
-            return items[self.current_menu_index]["name"]
-        else:
-            self.current_menu_index = 0
-            return items[0]["name"] if items else "No options available"
+        self.headset_pyr_state = PYRState(MQTT_HOST='localhost', MQTT_TOPIC='pi4/pitch_yaw_roll')
+        self.cane_pyr_state = PYRState()
+                
+    def set_default_button_callbacks(self):
+        print('Returned to Main Menu')
+        self.button_state.set_right_press_callback(self.handle_right_button)
+        self.button_state.set_left_press_callback(self.handle_left_button)
+        
+    def send_tts_configured(self, text):
+        send_tts(text, self.tts_speed, self.voice_name)
+
+    def handle_right_button(self):
+        self.cycle_menu()
+        self.announce_current_option()
+
+    def handle_left_button(self):
+        self.select_current_option()
 
     def cycle_menu(self):
-        items = self.get_current_menu_items()
-        if not items:
-            return
+        self.current_menu_index = (self.current_menu_index + 1) % len(self.menus[self.current_menu])
+        print(f"Cycled to: {self.menus[self.current_menu][self.current_menu_index]['name']}")
         
-        self.current_menu_index = (self.current_menu_index + 1) % len(items)
-        current_option = self.get_current_menu_option()
-        option_index = self.current_menu_index + 1
-        self.send_tts(f"option {option_index}: {current_option}")
-        self.vibrate_motors(left_duration=0.1, right_duration=0.1)
-        print(f"Current menu option: {option_index}: {current_option}")
-
+    def announce_current_option(self):
+        current_option = self.menus[self.current_menu][self.current_menu_index]
+        option_name = current_option['name']
+        self.send_tts_configured(option_name)
+        
     def select_current_option(self):
-        items = self.get_current_menu_items()
-        if not items or self.current_menu_index >= len(items):
-            self.send_tts("No option available")
-            return
+        current_option = self.menus[self.current_menu][self.current_menu_index]
         
-        current_item = items[self.current_menu_index]
-        current_option = current_item["name"]
-        option_index = self.current_menu_index + 1
-        print(f"Selected option {option_index}: {current_option}")
-        
-        if "submenu" in current_item:
-            submenu = current_item["submenu"]
-            self.menu_history.append((self.current_menu, self.current_menu_index))
-            self.current_menu = submenu
+        if "submenu" in current_option:
+            previous_menu = self.current_menu
+            self.current_menu = current_option["submenu"]
             self.current_menu_index = 0
-            new_option = self.get_current_menu_option()
-            new_index = self.current_menu_index + 1
-            self.send_tts(f"Submenu {submenu}. option {new_index}: {new_option}")
-            print(f"Entered submenu {submenu}. Current option {new_index}: {new_option}")
-        elif "action" in current_item:
-            action = current_item["action"]
-            if action:
-                try:
-                    self.in_menu = False
-                    action()
-                    self.in_menu = True
-                except Exception as e:
-                    print(f"Error executing action: {e}")
-                    self.in_menu = True
-
-    def init_mqtt(self):
-        client = mqtt.Client()
-        client.on_connect = self.on_connect
-        client.on_message = self.on_message
-        
-        try:
-            client.connect(MQTT_BROKER, MQTT_PORT, 60)
-        except Exception as e:
-            print(f"Error connecting to MQTT broker: {e}")
-            return None
             
-        self.mqtt_client = client
-        return client
+            vibrate_cane_motors(left_duration=0.1, right_duration=0.1)
+            
+            if previous_menu != self.current_menu:
+                menu_name = f"{self.current_menu} menu"
+                self.send_tts_configured(menu_name)
+                time.sleep(1)
+                self.announce_current_option()
+        elif "action" in current_option:
+            vibrate_cane_motors(left_duration=0.1, right_duration=0.1)
+            current_option["action"]()
 
     def run(self):
-        client = self.init_mqtt()
-        if client is None:
-            print("Failed to initialize MQTT client. Exiting.")
-            return
-        
-        print("Starting button event worker thread")
-        event_thread = threading.Thread(target=self.button_event_worker, daemon=True)
-        event_thread.start()
-        
-        client.loop_start()
-        
-        current_option = self.get_current_menu_option()
-        option_index = self.current_menu_index + 1
-        self.send_tts(f"Menu system initialized.")
-        self.send_tts(f"Current menu option {option_index}: {current_option}")
+        self.send_tts_configured(f"{self.current_menu} menu")
+        time.sleep(1)
+        self.announce_current_option()
         
         try:
-            print("Entering main loop")
-            while self.running:
+            while True:
                 time.sleep(0.1)
         except KeyboardInterrupt:
-            print("Interrupted by user")
-        finally:
-            self.running = False
-            event_thread.join(timeout=1.0)
-            client.loop_stop()
-            client.disconnect()
             print("Exiting menu system")
 
 def main():
