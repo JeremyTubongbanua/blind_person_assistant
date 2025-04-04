@@ -80,7 +80,6 @@ class MenuOptionHandler:
             selected_object = detections[current_index]
             label = selected_object.get('label', 'unknown')
             self.menu_system.send_tts_configured(f"Starting tracking loop for {label}.")
-            sleep(2.5)
             
             zero_pyr_cane()
             zero_pyr_headset()
@@ -134,20 +133,29 @@ class MenuOptionHandler:
                 else:
                     direction_desc = "very far to your " + direction
                 
+                sleep(2.5)
                 self.menu_system.send_tts_configured(
                     f"Object is {distance:.1f} meters away, {magnitude:.1f} degrees {direction_desc}."
                 )
+                                
+                def cancel_tracking_callback():
+                    nonlocal tracking
+                    tracking = False
+                    self.menu_system.send_tts_configured("Object tracking canceled.")
+                    self.menu_system.set_default_button_callbacks()
+
+                self.menu_system.button_state.set_left_press_callback(cancel_tracking_callback)
                 
-                headset_pyr = self.menu_system.headset_pyr_state.get_pyr_state()
-                cane_pyr = self.menu_system.cane_pyr_state.get_pyr_state()
-                
-                
-                headset_yaw = headset_pyr['yaw']
-                cane_yaw = cane_pyr['yaw']
-                
-                # Using the cane yaw, if the cane yaw is within 10 degrees difference to the horizontal angle, then run the vibration motors for 0.5
-                if abs(cane_yaw - horizontal_angle) <= 10:
-                    vibrate_cane_motors(left_duration=0.5, right_duration=0.5)
+                tracking = True
+                while tracking:
+                    headset_pyr = self.menu_system.headset_pyr_state.get_pyr_state()
+                    cane_pyr = self.menu_system.cane_pyr_state.get_pyr_state()
+                    headset_yaw = headset_pyr.get('yaw')
+                    cane_yaw = cane_pyr.get('yaw')
+                    print(f'{cane_yaw} and {horizontal_angle}')
+                    if abs(cane_yaw - horizontal_angle) <= 10:
+                        vibrate_cane_motors(left_duration=0.5, right_duration=0.5)
+                    sleep(0.5)  # Add a delay to avoid excessive vibrations
 
         try:
             self.menu_system.button_state.set_right_press_callback(right_button_callback)
