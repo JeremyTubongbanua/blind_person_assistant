@@ -1,0 +1,1794 @@
+<!DOCTYPE html>
+<html lang="en">
+
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Headset Monitoring Dashboard</title>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.min.js"></script>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                margin: 0;
+                padding: 20px;
+                background-color: #f5f5f5;
+            }
+
+            .dashboard {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(450px, 1fr));
+                gap: 20px;
+            }
+
+            #cameraDetections {
+                max-height: 300px;
+                min-height: 150px;
+                overflow-y: auto;
+                overflow-x: auto;
+                resize: vertical;
+                font-family: monospace;
+                margin-bottom: 10px;
+                border: 1px solid #ddd;
+            }
+
+            .section {
+                grid-column: span 2;
+                background-color: #f0f4f8;
+                border-radius: 8px;
+                padding: 15px;
+                margin-bottom: 20px;
+                border-left: 5px solid #4285f4;
+            }
+
+            .section-title {
+                font-size: 20px;
+                font-weight: bold;
+                margin-bottom: 15px;
+                color: #333;
+            }
+
+            .data-card {
+                background-color: white;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                padding: 15px;
+                margin-bottom: 20px;
+                display: flex;
+                flex-direction: column;
+                min-height: 350px;
+            }
+
+            .data-card .card-title {
+                flex-shrink: 0;
+            }
+
+            .data-card #cameraDetections {
+                flex-grow: 1;
+            }
+
+            .data-card .detection-btn {
+                flex-shrink: 0;
+                margin-top: auto;
+            }
+
+            .card-title {
+                font-size: 18px;
+                font-weight: bold;
+                margin-bottom: 10px;
+                padding-bottom: 10px;
+                border-bottom: 1px solid #eee;
+            }
+
+            pre {
+                background-color: #f8f8f8;
+                border-radius: 4px;
+                padding: 10px;
+                overflow: auto;
+                max-height: 300px;
+                min-height: 100px;
+                font-size: 13px;
+                line-height: 1.4;
+                margin: 0;
+                white-space: pre-wrap;
+                word-break: break-word;
+            }
+
+            .controls {
+                display: flex;
+                gap: 10px;
+                margin-bottom: 15px;
+            }
+
+            input[type="number"] {
+                padding: 8px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                width: 100px;
+            }
+
+            button {
+                padding: 8px 16px;
+                background-color: #4285f4;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+            }
+
+            button:hover {
+                background-color: #3367d6;
+            }
+
+            .status-indicator {
+                display: inline-block;
+                width: 12px;
+                height: 12px;
+                border-radius: 50%;
+                margin-left: 8px;
+                background-color: #ccc;
+            }
+
+            .status-connected {
+                background-color: #34a853;
+            }
+
+            .status-disconnected {
+                background-color: #ea4335;
+            }
+
+            h1 {
+                margin-bottom: 20px;
+            }
+
+            .header-controls {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 20px;
+            }
+
+            .mqtt-status {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+
+            .mqtt-indicator {
+                display: flex;
+                align-items: center;
+                margin-left: 10px;
+            }
+
+            .mqtt-indicator span {
+                margin-left: 5px;
+            }
+
+            #refreshStatus {
+                margin-left: 10px;
+                font-size: 14px;
+                font-style: italic;
+            }
+
+            .flex-container {
+                display: flex;
+                gap: 20px;
+            }
+
+            .flex-column {
+                flex: 1;
+            }
+
+            .device-label {
+                display: inline-block;
+                padding: 3px 8px;
+                border-radius: 12px;
+                font-size: 12px;
+                margin-right: 5px;
+                color: white;
+            }
+
+            .device-headset {
+                background-color: #4285f4;
+            }
+
+            .device-cane {
+                background-color: #34a853;
+            }
+
+            .camera-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 20px;
+            }
+
+            .camera-image {
+                width: 100%;
+                max-width: 100%;
+                height: 300px;
+                object-fit: contain;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                background-color: #f9f9f9;
+                border: 1px solid #ddd;
+            }
+
+            .detection-btn {
+                margin-top: 10px;
+                width: 100%;
+                background-color: #4CAF50;
+                padding: 10px 20px;
+                font-size: 16px;
+            }
+
+            .detection-btn:hover {
+                background-color: #45a049;
+            }
+
+            .audio-select {
+                padding: 8px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                min-width: 250px;
+            }
+
+            .volume-slider-container {
+                display: flex;
+                flex-direction: column;
+                width: 200px;
+                margin-right: 10px;
+            }
+
+            .volume-slider {
+                width: 100%;
+                margin-top: 5px;
+            }
+
+            .tts-controls {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .tts-input-row {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+
+            .tts-text-input {
+                flex-grow: 1;
+                padding: 8px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+            }
+
+            .tts-params-row {
+                display: flex;
+                gap: 20px;
+            }
+
+            .tts-param {
+                display: flex;
+                align-items: center;
+                gap: 5px;
+            }
+
+            .tts-select {
+                padding: 8px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                width: 150px;
+            }
+
+            #audioPlayStatus,
+            #volumeStatus,
+            #ttsStatus {
+                margin-top: 10px;
+                font-style: italic;
+                color: #666;
+            }
+
+            #status {
+                flex-shrink: 0;
+                min-height: 20px;
+            }
+
+            .image-container {
+                position: relative;
+                width: 100%;
+                height: 300px;
+                overflow: hidden;
+            }
+
+            .image-placeholder {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 100%;
+                height: 100%;
+                background-color: #f8f8f8;
+                color: #666;
+                font-style: italic;
+            }
+
+            .gauge-container {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                margin-bottom: 20px;
+            }
+
+            .gauge-grid {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 20px;
+                width: 100%;
+            }
+
+            .gauge-value {
+                text-align: center;
+                font-size: 24px;
+                font-weight: bold;
+                margin-top: 10px;
+            }
+
+            .gauge-label {
+                text-align: center;
+                font-size: 16px;
+                color: #666;
+                margin-top: 5px;
+            }
+
+            .svg-gauge {
+                width: 100%;
+                height: auto;
+                max-width: 150px;
+            }
+
+            .orientation-section {
+                margin-bottom: 30px;
+            }
+
+            .calibration-status {
+                margin-top: 15px;
+                padding: 10px;
+                background-color: #f5f5f5;
+                border-radius: 4px;
+                min-height: 60px;
+            }
+
+            #vibrateStatus {
+                margin-top: 10px;
+                padding: 10px;
+                background-color: #f5f5f5;
+                border-radius: 4px;
+                min-height: 20px;
+                word-wrap: break-word;
+                overflow-wrap: break-word;
+            }
+
+            .stacked-cards {
+                display: flex;
+                flex-direction: column;
+                gap: 20px;
+            }
+
+            @media (max-width: 1024px) {
+                .camera-grid {
+                    grid-template-columns: 1fr;
+                }
+
+                .gauge-grid {
+                    grid-template-columns: 1fr;
+                }
+            }
+
+            @media (max-width: 768px) {
+                .dashboard {
+                    grid-template-columns: 1fr;
+                }
+
+                .section {
+                    grid-column: span 1;
+                }
+
+                .header-controls {
+                    flex-direction: column;
+                    align-items: flex-start;
+                    gap: 10px;
+                }
+
+                .flex-container {
+                    flex-direction: column;
+                }
+
+                .tts-params-row {
+                    flex-direction: column;
+                    gap: 10px;
+                }
+
+                .volume-slider-container {
+                    width: 100%;
+                    margin-bottom: 10px;
+                }
+            }
+
+            /* Menu Visualization Styles */
+            .menu-header {
+                margin-bottom: 15px;
+            }
+
+            .menu-title {
+                font-size: 18px;
+                font-weight: bold;
+                margin-bottom: 5px;
+            }
+
+            .menu-path {
+                font-size: 14px;
+                color: #666;
+                margin-bottom: 10px;
+                padding-bottom: 10px;
+                border-bottom: 1px solid #eee;
+            }
+
+            .menu-items-container {
+                background-color: #f8f8f8;
+                border-radius: 8px;
+                overflow: hidden;
+                margin-bottom: 15px;
+            }
+
+            .menu-item {
+                display: flex;
+                align-items: center;
+                padding: 10px 15px;
+                border-bottom: 1px solid #eee;
+                position: relative;
+            }
+
+            .menu-item:last-child {
+                border-bottom: none;
+            }
+
+            .menu-item.selected {
+                background-color: #e0f0ff;
+                font-weight: bold;
+            }
+
+            .menu-item-number {
+                width: 24px;
+                height: 24px;
+                background-color: #ddd;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin-right: 10px;
+                font-size: 12px;
+                flex-shrink: 0;
+            }
+
+            .menu-item.selected .menu-item-number {
+                background-color: #4285f4;
+                color: white;
+            }
+
+            .menu-item-content {
+                flex-grow: 1;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+            }
+
+            .menu-icon {
+                margin-left: 8px;
+                font-style: normal;
+                color: #666;
+            }
+
+            .submenu-icon {
+                color: #4285f4;
+            }
+
+            .action-icon {
+                color: #34a853;
+            }
+
+            .selection-indicator {
+                position: absolute;
+                right: 10px;
+                color: #4285f4;
+                font-weight: bold;
+            }
+
+            .menu-navigation-info {
+                background-color: #f0f4f8;
+                padding: 10px;
+                border-radius: 8px;
+                font-size: 14px;
+                color: #666;
+                margin-top: 10px;
+            }
+
+            .menu-error {
+                color: #ea4335;
+                padding: 10px;
+                background-color: #ffeaea;
+                border-radius: 8px;
+                margin: 10px 0;
+            }
+        </style>
+    </head>
+
+    <body>
+        <div class="header-controls">
+            <h1>Headset Monitoring Dashboard</h1>
+            <div class="mqtt-status">
+                <button id="refreshMqttButton">Refresh MQTT Connections</button>
+                <span id="refreshStatus"></span>
+                <div class="mqtt-indicator">
+                    <div id="rpi2ConnectionStatus" class="status-indicator"></div>
+                    <span>RPI2</span>
+                </div>
+                <div class="mqtt-indicator">
+                    <div id="rpi4ConnectionStatus" class="status-indicator"></div>
+                    <span>RPI4</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="dashboard">
+
+            <div class="section">
+                <div class="section-title">Camera</div>
+                <div class="camera-grid">
+                    <div class="data-card">
+                        <div class="card-title">
+                            <span class="device-label device-headset">Headset</span>
+                            Live Raw Camera Stream
+                        </div>
+                        <div class="image-container">
+                            <img class="camera-image" src="http://192.168.2.220:8005/video_stream" alt="Camera Stream"
+                                onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                            <div class="image-placeholder" style="display:none;">Video stream unavailable</div>
+                        </div>
+                    </div>
+                    <div class="data-card">
+                        <div class="card-title">
+                            <span class="device-label device-headset">Headset</span>
+                            Detection Image
+                            <span id="detectionImageStatus" class="status-indicator"></span>
+                        </div>
+                        <div class="image-container">
+                            <img id="detection-image" class="camera-image" src="" alt="No detection image available"
+                                onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                            <div class="image-placeholder" style="display:flex;">No detection image available</div>
+                        </div>
+                    </div>
+                    <div class="data-card">
+                        <div class="card-title">
+                            <span class="device-label device-headset">Headset</span>
+                            Depth Map
+                            <span id="depthMapStatus" class="status-indicator"></span>
+                        </div>
+                        <div class="image-container">
+                            <img id="depth-image" class="camera-image" src="" alt="No depth map available"
+                                onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                            <div class="image-placeholder" style="display:flex;">No depth map available</div>
+                        </div>
+                    </div>
+                    <div class="data-card">
+                        <div class="card-title">
+                            <span class="device-label device-headset">Headset</span>
+                            Camera Detections
+                            <span id="cameraDetectionsStatus" class="status-indicator"></span>
+                        </div>
+                        <pre id="cameraDetectionsData">Awaiting data...</pre>
+                    </div>
+                    <div class="data-card">
+                        <div class="card-title">
+                            <span class="device-label device-headset">Headset</span>
+                            Run Detection
+                            <span id="detectionsStatus" class="status-indicator"></span>
+                        </div>
+                        <button id="runDetectionBtn" class="detection-btn">Run Detection</button>
+                        <pre id="cameraDetections">Awaiting data...</pre>
+                        <div id="status"></div>
+                    </div>
+                    <div class="data-card">
+                        <div class="card-title">
+                            <span class="device-label device-headset">Headset</span>
+                            Camera Control
+                        </div>
+                        <button id="startButton" class="detection-btn">Start</button>
+                        <button id="stopButton" class="detection-btn">Stop</button>
+                        <button id="restartButton" class="detection-btn">Restart</button>
+                        <button id="getStatusButton" class="detection-btn">Get Status</button>
+                        <pre id="controlStatus">Awaiting status...</pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">Pitch Yaw Roll</div>
+
+                <div class="orientation-section">
+                    <div class="data-card">
+                        <div class="card-title">
+                            <span class="device-label device-headset">Headset</span>
+                            Orientation Gauges
+                            <span id="pitchYawRollStatus" class="status-indicator"></span>
+                        </div>
+                        <div class="gauge-grid">
+                            <div class="gauge-container">
+                                <div id="pitchGauge"></div>
+                                <div id="pitchValue" class="gauge-value">0°</div>
+                                <div class="gauge-label">Pitch</div>
+                            </div>
+                            <div class="gauge-container">
+                                <div id="yawGauge"></div>
+                                <div id="yawValue" class="gauge-value">0°</div>
+                                <div class="gauge-label">Yaw</div>
+                            </div>
+                            <div class="gauge-container">
+                                <div id="rollGauge"></div>
+                                <div id="rollValue" class="gauge-value">0°</div>
+                                <div class="gauge-label">Roll</div>
+                            </div>
+                        </div>
+                        <pre id="pitchYawRollRaw" style="margin-top: 20px; max-height: 100px;">Awaiting data...</pre>
+                        <button id="calibrateButton" class="detection-btn">Calibrate</button>
+                        <button id="zeroButton" class="detection-btn">Zero</button>
+                        <div id="headsetCalibrationStatus" class="calibration-status"></div>
+                    </div>
+                </div>
+
+                <div class="orientation-section">
+                    <div class="data-card">
+                        <div class="card-title">
+                            <span class="device-label device-cane">Cane</span>
+                            Orientation Gauges
+                            <span id="canePitchYawRollStatus" class="status-indicator"></span>
+                        </div>
+                        <div class="gauge-grid">
+                            <div class="gauge-container">
+                                <div id="canePitchGauge"></div>
+                                <div id="canePitchValue" class="gauge-value">0°</div>
+                                <div class="gauge-label">Pitch</div>
+                            </div>
+                            <div class="gauge-container">
+                                <div id="caneYawGauge"></div>
+                                <div id="caneYawValue" class="gauge-value">0°</div>
+                                <div class="gauge-label">Yaw</div>
+                            </div>
+                            <div class="gauge-container">
+                                <div id="caneRollGauge"></div>
+                                <div id="caneRollValue" class="gauge-value">0°</div>
+                                <div class="gauge-label">Roll</div>
+                            </div>
+                        </div>
+                        <pre id="canePitchYawRollRaw"
+                            style="margin-top: 20px; max-height: 100px;">Awaiting data...</pre>
+                        <button id="caneCalibrateButton" class="detection-btn">Calibrate</button>
+                        <button id="caneZeroButton" class="detection-btn">Zero</button>
+                        <div id="caneCalibrationStatus" class="calibration-status"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">Raw Gyroscope</div>
+                <div class="flex-container">
+                    <div class="flex-column">
+                        <div class="data-card">
+                            <div class="card-title">
+                                <span class="device-label device-cane">Cane</span>
+                                Gyro
+                                <span id="gyroStatus" class="status-indicator"></span>
+                            </div>
+                            <pre id="gyro">Awaiting data...</pre>
+                        </div>
+                    </div>
+                    <div class="flex-column">
+                        <div class="data-card">
+                            <div class="card-title">
+                                <span class="device-label device-headset">Headset</span>
+                                Gyro
+                                <span id="headsetGyroStatus" class="status-indicator"></span>
+                            </div>
+                            <pre id="headsetGyro">Awaiting data...</pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">Vibration Motors</div>
+                <div class="flex-column">
+                    <div class="data-card">
+                        <div class="card-title">
+                            <span class="device-label device-cane">Cane</span>
+                            Vibrate Controls
+                        </div>
+                        <div class="controls">
+                            <div>
+                                <label for="leftDuration">Left Duration (seconds)</label>
+                                <input type="number" id="leftDuration" min="0" step="0.1" value="0.5">
+                            </div>
+                            <div>
+                                <label for="rightDuration">Right Duration (seconds)</label>
+                                <input type="number" id="rightDuration" min="0" step="0.1" value="0.5">
+                            </div>
+                            <button id="vibrateButton">Vibrate</button>
+                        </div>
+                        <div id="vibrateStatus"></div>
+                    </div>
+                </div>
+                <div class="stacked-cards">
+                    <div class="data-card">
+                        <div class="card-title">
+                            <span class="device-label device-cane">Cane</span>
+                            Vibration Motor Response
+                            <span id="vibrationResponseStatus" class="status-indicator"></span>
+                        </div>
+                        <pre id="vibrationMotorResponse">Awaiting data...</pre>
+                    </div>
+                    <div class="data-card">
+                        <div class="card-title">
+                            <span class="device-label device-headset">Headset</span>
+                            Vibration Motor Controller
+                            <span id="headsetVibrationStatus" class="status-indicator"></span>
+                        </div>
+                        <pre id="headsetVibrationMotorController">Awaiting data...</pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">Buttons</div>
+                <div class="data-card">
+                    <div class="card-title">
+                        <span class="device-label device-cane">Cane</span>
+                        Button State
+                        <span id="caneStatus" class="status-indicator"></span>
+                    </div>
+                    <pre id="caneButtonState">Awaiting data...</pre>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">Speaker</div>
+
+                <div class="data-card">
+                    <div class="card-title">Play Audio File</div>
+                    <div class="controls">
+                        <select id="audioFileSelect" class="audio-select">
+                            <option value="">Select audio file...</option>
+                            <option value="jjk.wav">JJK Sound</option>
+                            <option value="mixkit-retro-game-notification-212.wav">Retro Game Notification</option>
+                        </select>
+                        <button id="playAudioButton">Play</button>
+                        <div id="audioPlayStatus"></div>
+                    </div>
+                </div>
+
+                <div class="data-card">
+                    <div class="card-title">Volume Control</div>
+                    <div class="controls">
+                        <div class="volume-slider-container">
+                            <label for="volumeSlider">Volume: <span id="volumeValue">75</span>%</label>
+                            <input type="range" id="volumeSlider" min="0" max="100" value="75" class="volume-slider">
+                        </div>
+                        <button id="setVolumeButton">Set Volume</button>
+                        <button id="getVolumeButton">Get Current Volume</button>
+                        <div id="volumeStatus"></div>
+                    </div>
+                </div>
+
+                <div class="data-card">
+                    <div class="card-title">Text-to-Speech</div>
+                    <div class="tts-controls">
+                        <div class="tts-input-row">
+                            <label for="ttsText">Text:</label>
+                            <input type="text" id="ttsText" placeholder="Enter text to speak" class="tts-text-input">
+                        </div>
+                        <div class="tts-params-row">
+                            <div class="tts-param">
+                                <label for="ttsSpeed">Speed:</label>
+                                <select id="ttsSpeed" class="tts-select">
+                                    <option value="125">Normal (125)</option>
+                                    <option value="100">Slow (100)</option>
+                                    <option value="175">Fast (175)</option>
+                                    <option value="250">Very Fast (250)</option>
+                                </select>
+                            </div>
+                            <div class="tts-param">
+                                <label for="ttsVoice">Voice:</label>
+                                <select id="ttsVoice" class="tts-select">
+                                    <option value="en-us">English (US)</option>
+                                    <option value="en-gb">English (UK)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button id="speakButton">Speak</button>
+                        <div id="ttsStatus"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="section">
+                <div class="section-title">Menu System</div>
+                <div class="flex-container">
+                    <div class="flex-column">
+                        <div class="data-card menu-card">
+                            <div class="card-title">
+                                <span class="device-label device-headset">Headset</span>
+                                Menu Navigation
+                                <span id="menuStatus" class="status-indicator"></span>
+                            </div>
+                            <div id="menu" class="menu-visualization">Awaiting data...</div>
+                        </div>
+                    </div>
+                    <div class="flex-column">
+                        <div class="data-card">
+                            <div class="card-title">
+                                <span class="device-label device-headset">Headset</span>
+                                Menu Logs
+                                <span id="menuLogsStatus" class="status-indicator"></span>
+                            </div>
+                            <pre id="menuLogs">Awaiting data...</pre>
+                        </div>
+                    </div>
+                </div>
+            </div>        
+        </div>
+
+        <script>
+            const socket = io();
+            const statusUpdates = {};
+
+            const topicElements = {
+                'Cane Button State': { element: document.getElementById('caneButtonState'), status: document.getElementById('caneStatus') },
+                'Gyro': { element: document.getElementById('gyro'), status: document.getElementById('gyroStatus') },
+                'Vibration Motor Response': { element: document.getElementById('vibrationMotorResponse'), status: document.getElementById('vibrationResponseStatus') },
+                'Camera Detections Text': { element: document.getElementById('cameraDetectionsData'), status: document.getElementById('cameraDetectionsStatus') },
+                'Camera Detections': { element: document.getElementById('cameraDetections'), status: document.getElementById('detectionsStatus') },
+                'Headset Gyro': { element: document.getElementById('headsetGyro'), status: document.getElementById('headsetGyroStatus') },
+                'Headset Vibration Motor Controller': { element: document.getElementById('headsetVibrationMotorController'), status: document.getElementById('headsetVibrationStatus') },
+                'Menu': { element: document.getElementById('menu'), status: document.getElementById('menuStatus') },
+                'Menu Logs': { element: document.getElementById('menuLogs'), status: document.getElementById('menuLogsStatus') },
+            };
+
+            const rpi2ConnectionStatus = document.getElementById('rpi2ConnectionStatus');
+            const rpi4ConnectionStatus = document.getElementById('rpi4ConnectionStatus');
+            const refreshStatus = document.getElementById('refreshStatus');
+            const pitchYawRollStatus = document.getElementById('pitchYawRollStatus');
+            const headsetCalibrationStatus = document.getElementById('headsetCalibrationStatus');
+            const caneCalibrationStatus = document.getElementById('caneCalibrationStatus');
+
+            const detectionImageStatus = document.getElementById('detectionImageStatus');
+            const depthMapStatus = document.getElementById('depthMapStatus');
+
+            function polarToCartesian(centerX, centerY, radius, angleInDegrees) {
+                const angleInRadians = (angleInDegrees - 90) * Math.PI / 180.0;
+                return {
+                    x: centerX + (radius * Math.cos(angleInRadians)),
+                    y: centerY + (radius * Math.sin(angleInRadians))
+                };
+            }
+
+            function describeArc(x, y, radius, startAngle, endAngle) {
+                const start = polarToCartesian(x, y, radius, endAngle);
+                const end = polarToCartesian(x, y, radius, startAngle);
+                const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
+                const d = [
+                    "M", start.x, start.y,
+                    "A", radius, radius, 0, largeArcFlag, 0, end.x, end.y
+                ].join(" ");
+                return d;
+            }
+
+            function mapRange(value, inputMin, inputMax, outputMin, outputMax) {
+                return ((value - inputMin) / (inputMax - inputMin)) * (outputMax - outputMin) + outputMin;
+            }
+
+            function createGauge(elementId, min, max) {
+                const container = document.getElementById(elementId);
+
+                const svgNS = "http://www.w3.org/2000/svg";
+                const svg = document.createElementNS(svgNS, "svg");
+                svg.setAttribute("class", "svg-gauge");
+                svg.setAttribute("viewBox", "0 0 100 100");
+
+                const backgroundArc = document.createElementNS(svgNS, "path");
+                backgroundArc.setAttribute("d", describeArc(50, 50, 40, -180, 0));
+                backgroundArc.setAttribute("stroke", "#E0E0E0");
+                backgroundArc.setAttribute("stroke-width", "8");
+                backgroundArc.setAttribute("fill", "none");
+                svg.appendChild(backgroundArc);
+
+                const zones = [
+                    { color: "#30B32D", start: -180, end: -120 },
+                    { color: "#FFDD00", start: -120, end: -60 },
+                    { color: "#F03E3E", start: -60, end: 0 },
+                    { color: "#F03E3E", start: 0, end: 60 },
+                    { color: "#FFDD00", start: 60, end: 120 },
+                    { color: "#30B32D", start: 120, end: 180 }
+                ];
+
+                zones.forEach(zone => {
+                    const zoneArc = document.createElementNS(svgNS, "path");
+                    zoneArc.setAttribute("d", describeArc(50, 50, 40, zone.start, zone.end));
+                    zoneArc.setAttribute("stroke", zone.color);
+                    zoneArc.setAttribute("stroke-width", "8");
+                    zoneArc.setAttribute("fill", "none");
+                    svg.appendChild(zoneArc);
+                });
+
+                const needle = document.createElementNS(svgNS, "line");
+                needle.setAttribute("x1", "50");
+                needle.setAttribute("y1", "50");
+                needle.setAttribute("x2", "50");
+                needle.setAttribute("y2", "15");
+                needle.setAttribute("stroke", "#333");
+                needle.setAttribute("stroke-width", "2");
+                needle.setAttribute("id", `${elementId}-needle`);
+                svg.appendChild(needle);
+
+                const centerCircle = document.createElementNS(svgNS, "circle");
+                centerCircle.setAttribute("cx", "50");
+                centerCircle.setAttribute("cy", "50");
+                centerCircle.setAttribute("r", "4");
+                centerCircle.setAttribute("fill", "#333");
+                svg.appendChild(centerCircle);
+
+                const zeroLine = document.createElementNS(svgNS, "line");
+                zeroLine.setAttribute("x1", "50");
+                zeroLine.setAttribute("y1", "50");
+                zeroLine.setAttribute("x2", "50");
+                zeroLine.setAttribute("y2", "15");
+                zeroLine.setAttribute("stroke", "#999");
+                zeroLine.setAttribute("stroke-width", "1");
+                zeroLine.setAttribute("stroke-dasharray", "2,2");
+                svg.appendChild(zeroLine);
+
+                const minLabel = document.createElementNS(svgNS, "text");
+                minLabel.setAttribute("x", "10");
+                minLabel.setAttribute("y", "55");
+                minLabel.setAttribute("font-size", "10");
+                minLabel.setAttribute("fill", "#666");
+                minLabel.textContent = min + "°";
+                svg.appendChild(minLabel);
+
+                const maxLabel = document.createElementNS(svgNS, "text");
+                maxLabel.setAttribute("x", "85");
+                maxLabel.setAttribute("y", "55");
+                maxLabel.setAttribute("font-size", "10");
+                maxLabel.setAttribute("fill", "#666");
+                maxLabel.textContent = max + "°";
+                svg.appendChild(maxLabel);
+
+                container.appendChild(svg);
+
+                return function updateGauge(value) {
+                    value = Math.max(min, Math.min(max, value));
+
+                    const angle = mapRange(value, min, max, -90, 90);
+
+                    const radians = (angle - 90) * Math.PI / 180;
+                    const x = 50 + 35 * Math.cos(radians);
+                    const y = 50 + 35 * Math.sin(radians);
+
+                    const needle = document.getElementById(`${elementId}-needle`);
+                    needle.setAttribute("x2", x);
+                    needle.setAttribute("y2", y);
+                };
+            }
+
+            const updatePitchGauge = createGauge('pitchGauge', -90, 90);
+            const updateYawGauge = createGauge('yawGauge', -90, 90);
+            const updateRollGauge = createGauge('rollGauge', -90, 90);
+
+            const updateCanePitchGauge = createGauge('canePitchGauge', -90, 90);
+            const updateCaneYawGauge = createGauge('caneYawGauge', -90, 90);
+            const updateCaneRollGauge = createGauge('caneRollGauge', -90, 90);
+
+
+            socket.on('connect', function () {
+                console.log('Connected to server');
+
+                socket.on('mqtt_message', function (data) {
+                    if (data.topic === 'pi4/pitch_yaw_roll') {
+                        try {
+                            const payload = JSON.parse(data.payload);
+                            updateGyroGauges(payload);
+                        } catch (e) {
+                            console.error('Error parsing pitch_yaw_roll data:', e);
+                        }
+                    } else if (data.topic == 'pi2/pitch_yaw_roll') {
+                        try {
+                            const payload = JSON.parse(data.payload);
+                            updateCaneGyroGauges(payload);
+                        } catch (e) {
+                            console.error('Error parsing pitch_yaw_roll data:', e);
+                        }
+                    } else if (data.topic == 'pi4/detections') {
+                        try {
+                            if (data.payload) {
+                                updateDetections(data.payload);
+                            }
+                        } catch (e) {
+                            console.error('Error parsing detections data:', e);
+                        }
+                    } else if (data.topic == 'pi4/detection_image') {
+                        try {
+                            const payload = JSON.parse(data.payload);
+                            updateDetectionImage(payload);
+                        } catch (e) {
+                            console.error('Error parsing detection image data:', e);
+                        }
+                    } else if (data.topic == 'pi4/depth_map') {
+                        try {
+                            const payload = JSON.parse(data.payload);
+                            updateDepthMap(payload);
+                        } catch (e) {
+                            console.error('Error parsing depth map data:', e);
+                        }
+                    } else if (data.topic == 'pi4/menu') {
+                        try {
+                            const payload = JSON.parse(data.payload);
+                            updateMenu(payload);
+                        } catch (e) {
+                            console.error('Error parsing menu data:', e);
+                        }
+                    } else if (data.topic == 'pi4/menu_logs') {
+                        try {
+                            const payload = JSON.parse(data.payload);
+                            updateMenuLogs(payload);
+                        } catch (e) {
+                            console.error('Error parsing menu logs data:', e);
+                        }
+                    }
+                });
+
+            });
+
+                // Enhanced Menu Visualization Functions
+        function createMenuVisualization(menuData) {
+            // Parse the menu data if it's a string
+            let data = menuData;
+            if (typeof menuData === 'string') {
+                try {
+                    data = JSON.parse(menuData);
+                } catch (e) {
+                    console.error('Error parsing menu data:', e);
+                    return `<div class="menu-error">Error parsing menu data: ${e.message}</div>`;
+                }
+            }
+            
+            if (!data || !data.items || !Array.isArray(data.items)) {
+                return '<div class="menu-error">Invalid menu data structure</div>';
+            }
+            
+            // Create the menu path display
+            let html = `<div class="menu-header">
+                <div class="menu-title">${data.current_menu.toUpperCase()}</div>
+                <div class="menu-path">${data.path.join(' > ')}</div>
+            </div>`;
+            
+            // Create the menu items list
+            html += '<div class="menu-items-container">';
+            
+            data.items.forEach((item, index) => {
+                const isSelected = item.is_selected;
+                const itemTypeIcon = item.has_submenu ? 
+                    '<i class="menu-icon submenu-icon">➤</i>' : 
+                    (item.has_action ? '<i class="menu-icon action-icon">⚙</i>' : '');
+                
+                const itemClass = isSelected ? 'menu-item selected' : 'menu-item';
+                
+                html += `<div class="${itemClass}" data-index="${index}">
+                    <div class="menu-item-number">${index + 1}</div>
+                    <div class="menu-item-content">
+                        <span class="menu-item-name">${item.name}</span>
+                        ${itemTypeIcon}
+                    </div>
+                    ${isSelected ? '<div class="selection-indicator">◀</div>' : ''}
+                </div>`;
+            });
+            
+            html += '</div>';
+            
+            // Add menu navigation info
+            html += `<div class="menu-navigation-info">
+                <div>Button 2: Cycle through options</div>
+                <div>Button 1: Select option</div>
+            </div>`;
+            
+            return html;
+        }
+
+        // Function to update the menu visualization when new data is received
+        function updateMenuVisualization(menuEl, menuData) {
+            try {
+                if (typeof menuData === 'string') {
+                    // Try to parse the string as JSON
+                    try {
+                        const parsedData = JSON.parse(menuData);
+                        menuEl.innerHTML = createMenuVisualization(parsedData);
+                    } catch (e) {
+                        // If parsing fails, just display the string
+                        menuEl.innerHTML = `<pre>${menuData}</pre>`;
+                    }
+                } else {
+                    // If it's already an object, use it directly
+                    menuEl.innerHTML = createMenuVisualization(menuData);
+                }
+            } catch (e) {
+                console.error('Error updating menu visualization:', e);
+                menuEl.innerHTML = `<div class="menu-error">Error updating menu: ${e.message}</div>`;
+            }
+        }
+
+        // Update the existing updateMenu function
+        function updateMenu(data) {
+            const menuEl = document.getElementById('menu');
+            const statusEl = document.getElementById('menuStatus');
+
+            if (data) {
+                updateMenuVisualization(menuEl, data);
+                
+                // Update status indicator
+                statusEl.className = 'status-indicator status-connected';
+
+                // Set timeout to change status indicator after inactivity
+                if (statusUpdates['Menu']) {
+                    clearTimeout(statusUpdates['Menu']);
+                }
+                statusUpdates['Menu'] = setTimeout(() => {
+                    statusEl.className = 'status-indicator status-disconnected';
+                }, 10000);
+            } else {
+                menuEl.innerHTML = '<div class="menu-error">No menu data received</div>';
+            }
+        }
+            function updateDetections(data) {
+                const detectionsEl = document.getElementById('cameraDetectionsData');
+                const statusEl = document.getElementById('cameraDetectionsStatus');
+
+                if (data && Object.keys(data).length > 0) {
+                    detectionsEl.textContent = JSON.stringify(data, null, 2);
+                    statusEl.className = 'status-indicator status-connected';
+                } else {
+                    detectionsEl.textContent = "No detections found";
+                    statusEl.className = 'status-indicator status-disconnected';
+                }
+            }
+
+            function updateDetectionImage(data) {
+                const detectionImageEl = document.getElementById('detection-image');
+                const detectionImagePlaceholder = detectionImageEl.nextElementSibling;
+                const detectionIdEl = document.getElementById('detectionImageStatus');
+
+                if (data && data.id && data.detection_image) {
+                    detectionImageEl.src = `data:image/jpeg;base64,${data.detection_image}`;
+                    detectionImageEl.style.display = 'block';
+                    detectionImagePlaceholder.style.display = 'none';
+
+                    // detectionIdEl.textContent = `ID: ${data.id}`;
+                    detectionIdEl.className = 'status-indicator status-connected';
+                } else {
+                    detectionImageEl.style.display = 'none';
+                    detectionImagePlaceholder.style.display = 'flex';
+                    detectionImagePlaceholder.textContent = 'No detection image available';
+
+                    detectionIdEl.className = 'status-indicator status-disconnected';
+                }
+            }
+
+            function updateDepthMap(data) {
+                const depthImageEl = document.getElementById('depth-image');
+                const depthImagePlaceholder = depthImageEl.nextElementSibling;
+                const depthIdEl = document.getElementById('depthMapStatus');
+
+                if (data && data.id && data.depth_map) {
+                    depthImageEl.src = `data:image/jpeg;base64,${data.depth_map}`;
+                    depthImageEl.style.display = 'block';
+                    depthImagePlaceholder.style.display = 'none';
+
+                    // Update status with ID
+                    // depthIdEl.textContent = `ID: ${data.id}`;
+                    depthIdEl.className = 'status-indicator status-connected';
+                } else {
+                    depthImageEl.style.display = 'none';
+                    depthImagePlaceholder.style.display = 'flex';
+                    depthImagePlaceholder.textContent = 'No depth map available';
+
+                    depthIdEl.className = 'status-indicator status-disconnected';
+                }
+            }
+
+            document.getElementById('runDetectionBtn').addEventListener('click', function () {
+                const detectionImageEl = document.getElementById('detection-image');
+                const detectionImagePlaceholder = detectionImageEl.nextElementSibling;
+                const depthImageEl = document.getElementById('depth-image');
+                const depthImagePlaceholder = depthImageEl.nextElementSibling;
+                const detectionsEl = document.getElementById('cameraDetections');
+                const statusEl = document.getElementById('detectionsStatus');
+                const statusTextEl = document.getElementById('status');
+                const detectionIdEl = document.getElementById('detectionImageStatus');
+                const depthIdEl = document.getElementById('depthMapStatus');
+
+                detectionsEl.textContent = "Running detection...";
+                statusEl.className = 'status-indicator status-connected';
+                statusTextEl.textContent = "Running detection...";
+
+                // detectionIdEl.textContent = 'Awaiting new data...';
+                // depthIdEl.textContent = 'Awaiting new data...';
+
+                fetch('/run_detection')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'ok') {
+                            statusTextEl.textContent = "Detection completed successfully";
+                        } else {
+                            detectionsEl.textContent = "Error: " + (data.error || "Unknown error");
+
+                            detectionImageEl.style.display = 'none';
+                            detectionImagePlaceholder.style.display = 'flex';
+                            detectionImagePlaceholder.textContent = 'Detection failed';
+
+                            depthImageEl.style.display = 'none';
+                            depthImagePlaceholder.style.display = 'flex';
+                            depthImagePlaceholder.textContent = 'Depth map unavailable';
+
+                            // detectionIdEl.textContent = 'Failed';
+                            // depthIdEl.textContent = 'Failed';
+                        }
+
+                        setTimeout(() => {
+                            statusTextEl.textContent = "";
+                        }, 5000);
+                    })
+                    .catch(error => {
+                        detectionsEl.textContent = "Request failed: " + error.message;
+                        statusEl.className = 'status-indicator status-disconnected';
+                        statusTextEl.textContent = "Request failed: " + error.message;
+
+                        detectionIdEl.textContent = 'Request failed';
+                        depthIdEl.textContent = 'Request failed';
+
+                        setTimeout(() => {
+                            statusTextEl.textContent = "";
+                        }, 5000);
+                    });
+            });
+
+            function updateGyroGauges(data) {
+                const pitchValue = document.getElementById('pitchValue');
+                const yawValue = document.getElementById('yawValue');
+                const rollValue = document.getElementById('rollValue');
+                const pitchYawRollRaw = document.getElementById('pitchYawRollRaw');
+
+                if (data.pitch !== undefined) {
+                    updatePitchGauge(data.pitch);
+                    pitchValue.textContent = data.pitch.toFixed(1) + '°';
+                }
+
+                if (data.yaw !== undefined) {
+                    updateYawGauge(data.yaw);
+                    yawValue.textContent = data.yaw.toFixed(1) + '°';
+                }
+
+                if (data.roll !== undefined) {
+                    updateRollGauge(data.roll);
+                    rollValue.textContent = data.roll.toFixed(1) + '°';
+                }
+
+                pitchYawRollRaw.textContent = JSON.stringify(data, null, 2);
+                pitchYawRollStatus.className = 'status-indicator status-connected';
+
+                if (statusUpdates['pitch_yaw_roll']) {
+                    clearTimeout(statusUpdates['pitch_yaw_roll']);
+                }
+
+                statusUpdates['pitch_yaw_roll'] = setTimeout(() => {
+                    pitchYawRollStatus.className = 'status-indicator status-disconnected';
+                }, 10000);
+            }
+
+            function updateCaneGyroGauges(data) {
+                const pitchValue = document.getElementById('canePitchValue');
+                const yawValue = document.getElementById('caneYawValue');
+                const rollValue = document.getElementById('caneRollValue');
+                const canePitchYawRollRaw = document.getElementById('canePitchYawRollRaw');
+                const canePitchYawRollStatus = document.getElementById('canePitchYawRollStatus');
+
+                if (data.pitch !== undefined) {
+                    updateCanePitchGauge(data.pitch);
+                    pitchValue.textContent = data.pitch.toFixed(1) + '°';
+                }
+
+                if (data.yaw !== undefined) {
+                    updateCaneYawGauge(data.yaw);
+                    yawValue.textContent = data.yaw.toFixed(1) + '°';
+                }
+
+                if (data.roll !== undefined) {
+                    updateCaneRollGauge(data.roll);
+                    rollValue.textContent = data.roll.toFixed(1) + '°';
+                }
+
+                canePitchYawRollRaw.textContent = JSON.stringify(data, null, 2);
+                canePitchYawRollStatus.className = 'status-indicator status-connected';
+
+                if (statusUpdates['cane_pitch_yaw_roll']) {
+                    clearTimeout(statusUpdates['cane_pitch_yaw_roll']);
+                }
+
+                statusUpdates['cane_pitch_yaw_roll'] = setTimeout(() => {
+                    canePitchYawRollStatus.className = 'status-indicator status-disconnected';
+                }, 10000);
+            }
+
+            socket.on('mqtt_update', function (data) {
+                const { topic, payload } = data;
+
+                if (topicElements[topic]) {
+                    const formattedPayload = JSON.stringify(payload, null, 2);
+                    topicElements[topic].element.textContent = formattedPayload;
+
+                    topicElements[topic].status.className = 'status-indicator status-connected';
+
+                    if (statusUpdates[topic]) {
+                        clearTimeout(statusUpdates[topic]);
+                    }
+
+                    statusUpdates[topic] = setTimeout(() => {
+                        topicElements[topic].status.className = 'status-indicator status-disconnected';
+                    }, 10000);
+                }
+            });
+
+            socket.on('mqtt_connection_status', function (data) {
+                console.log('MQTT connection status update:', data);
+
+                if (data.rpi2_connected !== undefined) {
+                    rpi2ConnectionStatus.className = data.rpi2_connected ?
+                        'status-indicator status-connected' :
+                        'status-indicator status-disconnected';
+                }
+
+                if (data.rpi4_connected !== undefined) {
+                    rpi4ConnectionStatus.className = data.rpi4_connected ?
+                        'status-indicator status-connected' :
+                        'status-indicator status-disconnected';
+                }
+
+                if (data.status === 'connecting') {
+                    refreshStatus.textContent = 'Connecting...';
+                } else if (data.status === 'connected') {
+                    refreshStatus.textContent = 'Connected successfully';
+                    setTimeout(() => { refreshStatus.textContent = ''; }, 5000);
+                } else if (data.status === 'failed') {
+                    refreshStatus.textContent = 'Connection failed';
+                    setTimeout(() => { refreshStatus.textContent = ''; }, 5000);
+                }
+            });
+
+            function updateMenuLogs(data) {
+                const logsEl = document.getElementById('menuLogs');
+                const statusEl = document.getElementById('menuLogsStatus');
+                
+                // Get the message from the data
+                let logMessage = '';
+                if (data && data.message) {
+                    logMessage = data.message;
+                } else if (typeof data === 'string') {
+                    logMessage = data;
+                } else {
+                    logMessage = JSON.stringify(data, null, 2);
+                }
+                
+                // Prepend timestamp to the log message
+                const timestamp = new Date().toLocaleTimeString();
+                logMessage = `[${timestamp}] ${logMessage}`;
+                
+                // Append to the existing logs, but keep only the most recent entries
+                const currentLogs = logsEl.textContent.split('\n');
+                currentLogs.unshift(logMessage);  // Add new log at the beginning
+                
+                // Keep only the most recent 100 log entries to prevent excessive growth
+                if (currentLogs.length > 100) {
+                    currentLogs.length = 100;
+                }
+                
+                logsEl.textContent = currentLogs.join('\n');
+                
+                // Update status indicator
+                statusEl.className = 'status-indicator status-connected';
+                
+                // Set timeout to change status indicator after inactivity
+                if (statusUpdates['Menu Logs']) {
+                    clearTimeout(statusUpdates['Menu Logs']);
+                }
+                statusUpdates['Menu Logs'] = setTimeout(() => {
+                    statusEl.className = 'status-indicator status-disconnected';
+                }, 10000);
+            }
+
+            fetch('/get_all_data')
+                .then(response => response.json())
+                .then(data => {
+                    for (const [topic, payload] of Object.entries(data)) {
+                        if (payload && topicElements[topic]) {
+                            const formattedPayload = JSON.stringify(payload, null, 2);
+                            topicElements[topic].element.textContent = formattedPayload;
+                            topicElements[topic].status.className = 'status-indicator status-connected';
+
+                            statusUpdates[topic] = setTimeout(() => {
+                                topicElements[topic].status.className = 'status-indicator status-disconnected';
+                            }, 10000);
+                        }
+                    }
+                });
+
+            document.getElementById('vibrateButton').addEventListener('click', function () {
+                const leftDuration = parseFloat(document.getElementById('leftDuration').value);
+                const rightDuration = parseFloat(document.getElementById('rightDuration').value);
+                const statusElement = document.getElementById('vibrateStatus');
+
+                statusElement.textContent = "Sending vibration command...";
+
+                fetch('/vibrate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        left_duration: leftDuration,
+                        right_duration: rightDuration
+                    })
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        statusElement.textContent = `Vibration command sent: ${JSON.stringify(data)}`;
+                        setTimeout(() => {
+                            statusElement.textContent = "";
+                        }, 5000);
+                    })
+                    .catch(error => {
+                        statusElement.textContent = `Error: ${error.message}`;
+                    });
+            });
+
+            document.getElementById('refreshMqttButton').addEventListener('click', function () {
+                const button = this;
+                refreshStatus.textContent = "Reconnecting...";
+                button.disabled = true;
+
+                fetch('/refresh_mqtt', {
+                    method: 'POST'
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log('Refresh MQTT response:', data);
+                        if (data.status === 'success') {
+                            refreshStatus.textContent = "MQTT connections refreshed successfully";
+                        } else {
+                            refreshStatus.textContent = `Error: ${data.error}`;
+                        }
+                        setTimeout(() => {
+                            button.disabled = false;
+                        }, 2000);
+                    })
+                    .catch(error => {
+                        refreshStatus.textContent = `Error: ${error.message}`;
+                        button.disabled = false;
+                    });
+            });
+
+            function setupImageErrorHandling(imageId) {
+                const imgEl = document.getElementById(imageId);
+                if (imgEl) {
+                    imgEl.addEventListener('error', function () {
+                        this.style.display = 'none';
+                        const placeholder = this.nextElementSibling;
+                        if (placeholder) {
+                            placeholder.style.display = 'flex';
+                        }
+                    });
+
+                    imgEl.addEventListener('load', function () {
+                        this.style.display = 'block';
+                        const placeholder = this.nextElementSibling;
+                        if (placeholder) {
+                            placeholder.style.display = 'none';
+                        }
+                    });
+                }
+            }
+
+            setupImageErrorHandling('detection-image');
+            setupImageErrorHandling('depth-image');
+
+            document.getElementById('playAudioButton').addEventListener('click', function () {
+                const audioFile = document.getElementById('audioFileSelect').value;
+                const statusElement = document.getElementById('audioPlayStatus');
+
+                if (!audioFile) {
+                    statusElement.textContent = "Please select an audio file";
+                    return;
+                }
+
+                statusElement.textContent = `Playing ${audioFile}...`;
+
+                fetch('/play_audio', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        file: audioFile
+                    })
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        statusElement.textContent = data.message;
+                        setTimeout(() => {
+                            statusElement.textContent = "";
+                        }, 5000);
+                    })
+                    .catch(error => {
+                        statusElement.textContent = `Error: ${error.message}`;
+                    });
+            });
+
+            const volumeSlider = document.getElementById('volumeSlider');
+            const volumeValue = document.getElementById('volumeValue');
+
+            volumeSlider.addEventListener('input', function () {
+                volumeValue.textContent = this.value;
+            });
+
+            document.getElementById('setVolumeButton').addEventListener('click', function () {
+                const volume = volumeSlider.value;
+                const statusElement = document.getElementById('volumeStatus');
+
+                statusElement.textContent = `Setting volume to ${volume}%...`;
+
+                fetch('/set_volume', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        volume: volume
+                    })
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        statusElement.textContent = data.message;
+                        setTimeout(() => {
+                            statusElement.textContent = "";
+                        }, 5000);
+                    })
+                    .catch(error => {
+                        statusElement.textContent = `Error: ${error.message}`;
+                    });
+            });
+
+            document.getElementById('getVolumeButton').addEventListener('click', function () {
+                const statusElement = document.getElementById('volumeStatus');
+
+                statusElement.textContent = "Getting current volume...";
+
+                fetch('/get_volume')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.volume !== undefined) {
+                            volumeSlider.value = data.volume;
+                            volumeValue.textContent = data.volume;
+                            statusElement.textContent = `Current volume: ${data.volume}%`;
+                        } else {
+                            statusElement.textContent = "Error retrieving volume";
+                        }
+
+                        setTimeout(() => {
+                            statusElement.textContent = "";
+                        }, 5000);
+                    })
+                    .catch(error => {
+                        statusElement.textContent = `Error: ${error.message}`;
+                    });
+            });
+
+            fetch('/get_volume')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.volume !== undefined) {
+                        volumeSlider.value = data.volume;
+                        volumeValue.textContent = data.volume;
+                    }
+                })
+                .catch(error => {
+                    console.error("Error initializing volume:", error);
+                });
+
+            document.getElementById('speakButton').addEventListener('click', function () {
+                const text = document.getElementById('ttsText').value;
+                const speed = document.getElementById('ttsSpeed').value;
+                const voice = document.getElementById('ttsVoice').value;
+                const statusElement = document.getElementById('ttsStatus');
+
+                if (!text) {
+                    statusElement.textContent = "Please enter text to speak";
+                    return;
+                }
+
+                statusElement.textContent = "Speaking...";
+
+                fetch('/text_to_speech', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        speed: speed,
+                        voice_name: voice
+                    })
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        statusElement.textContent = data.message || "Speech completed";
+                        setTimeout(() => {
+                            statusElement.textContent = "";
+                        }, 5000);
+                    })
+                    .catch(error => {
+                        statusElement.textContent = `Error: ${error.message}`;
+                    });
+            });
+
+            document.getElementById('calibrateButton').addEventListener('click', function () {
+                const statusArea = document.getElementById('headsetCalibrationStatus');
+                statusArea.textContent = "Calibrating headset gyro... please wait";
+
+                fetch('/calibrate_headset_gyro', {
+                    method: 'POST'
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        statusArea.textContent = "Calibration complete!\nResponse: " + JSON.stringify(data, null, 2);
+                    })
+                    .catch(error => {
+                        statusArea.textContent = "Calibration failed: " + error.message;
+                    });
+            });
+
+            document.getElementById('zeroButton').addEventListener('click', function () {
+                const statusArea = document.getElementById('headsetCalibrationStatus');
+                statusArea.textContent = "Zeroing headset gyro... please wait";
+
+                fetch('/zero_headset_gyro', {
+                    method: 'POST'
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        statusArea.textContent = "Zeroing complete!\nResponse: " + JSON.stringify(data, null, 2);
+                    })
+                    .catch(error => {
+                        statusArea.textContent = "Zeroing failed: " + error.message;
+                    });
+            });
+
+            document.getElementById('caneCalibrateButton').addEventListener('click', function () {
+                const statusArea = document.getElementById('caneCalibrationStatus');
+                statusArea.textContent = "Calibrating cane gyro... please wait";
+
+                fetch('/calibrate_cane_gyro', {
+                    method: 'POST'
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        statusArea.textContent = "Calibration complete!\nResponse: " + JSON.stringify(data, null, 2);
+                    })
+                    .catch(error => {
+                        statusArea.textContent = "Calibration failed: " + error.message;
+                    });
+            });
+
+            document.getElementById('caneZeroButton').addEventListener('click', function () {
+                const statusArea = document.getElementById('caneCalibrationStatus');
+                statusArea.textContent = "Zeroing cane gyro... please wait";
+
+                fetch('/zero_cane_gyro', {
+                    method: 'POST'
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        statusArea.textContent = "Zeroing complete!\nResponse: " + JSON.stringify(data, null, 2);
+                    })
+                    .catch(error => {
+                        statusArea.textContent = "Zeroing failed: " + error.message;
+                    });
+            });
+
+            document.getElementById('startButton').addEventListener('click', function () {
+                const statusElement = document.getElementById('controlStatus');
+                statusElement.textContent = "Starting camera...";
+
+                fetch('/start_camera', {
+                    method: 'POST'
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        statusElement.textContent = data.message || "Camera started";
+                        setTimeout(() => {
+                            statusElement.textContent = "";
+                        }, 5000);
+                    })
+                    .catch(error => {
+                        statusElement.textContent = `Error: ${error.message}`;
+                    });
+            });
+
+            document.getElementById('stopButton').addEventListener('click', function () {
+                const statusElement = document.getElementById('controlStatus');
+                statusElement.textContent = "Stopping camera...";
+
+                fetch('/stop_camera', {
+                    method: 'POST'
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        statusElement.textContent = data.message || "Camera stopped";
+                        setTimeout(() => {
+                            statusElement.textContent = "";
+                        }, 5000);
+                    })
+                    .catch(error => {
+                        statusElement.textContent = `Error: ${error.message}`;
+                    });
+            });
+
+            document.getElementById('getStatusButton').addEventListener('click', function () {
+                const statusElement = document.getElementById('controlStatus');
+                statusElement.textContent = "Getting camera status...";
+
+                fetch('/camera_status')
+                    .then(response => response.json())
+                    .then(data => {
+                        statusElement.textContent = JSON.stringify(data, null, 2);
+                        setTimeout(() => {
+                            statusElement.textContent = "";
+                        }, 5000);
+                    })
+                    .catch(error => {
+                        statusElement.textContent = `Error: ${error.message}`;
+                    });
+            });
+
+            document.getElementById('restartButton').addEventListener('click', function () {
+                const statusElement = document.getElementById('controlStatus');
+                statusElement.textContent = "Restarting camera...";
+
+                fetch('/restart_camera', {
+                    method: 'POST'
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        statusElement.textContent = data.message || "Camera restarted";
+                        setTimeout(() => {
+                            statusElement.textContent = "";
+                        }, 5000);
+                    })
+                    .catch(error => {
+                        statusElement.textContent = `Error: ${error.message}`;
+                    });
+            });
+        </script>
+    </body>
+
+</html>
