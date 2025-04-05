@@ -6,7 +6,20 @@ Design and Development of Blind Person Assistant
 
 ## Table of Contents
 
-<!-- TODO -->
+- [blind_person_assistant](#blind-person-assistant)
+  - [Table of Contents](#table-of-contents)
+  - [Team Members](#team-members)
+  - [YouTube Video](#youtube-video)
+  - [Capstone Poster](#capstone-poster)
+  - [Directory Overview](#directory-overview)
+  - [Overall System Architecture](#overall-system-architecture)
+  - [Hardware Architecture](#hardware-architecture)
+    - [Headset](#headset)
+    - [Exploded System Gateway](#exploded-system-gateway)
+    - [Exploded Smart Cane](#exploded-smart-cane)
+  - [Software Architecture](#software-architecture)
+    - [Headset](#headset-1)
+    - [Smart Cane](#smart-cane)
 
 ## Team Members
 
