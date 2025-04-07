@@ -12,7 +12,7 @@ cturing Information (PMI)---4.0---2014-10-13'),
 
 FILE_NAME(
 /* name */ 'SystemGatewayAssembly.step',
-/* time_stamp */ '2025-04-05T02:18:14-04:00',
+/* time_stamp */ '2025-04-07T11:33:33-04:00',
 /* author */ (''),
 /* organization */ (''),
 /* preprocessor_version */ 'ST-DEVELOPER v20',
@@ -7298,7 +7298,7 @@ POSITIVE_RATIO_MEASURE(7850.),#4351);
 #7199=CARTESIAN_POINT('',(70.2921363325434,0.,15.3172418061841));
 #7200=CARTESIAN_POINT('',(66.9921363325433,-91.5,17.5172418061843));
 #7201=CARTESIAN_POINT('',(0.,0.,0.));
-#7202=CARTESIAN_POINT('',(0.,0.,0.));
+#7202=CARTESIAN_POINT('',(0.,0.,1.));
 #7203=CARTESIAN_POINT('',(0.,0.,0.));
 #7204=CARTESIAN_POINT('',(0.,0.,0.));
 #7205=UNCERTAINTY_MEASURE_WITH_UNIT(LENGTH_MEASURE(0.01),#7223,
