@@ -127,5 +127,5 @@ The smart cane code can be found in the `smart_cane/` directory.
 |----------------|----------------|-----------------|-------------|
 | buttons | `pi2/button_state` | N/A | Publishes the state of the push buttons to the MQTT topic. |
 | gyro | `pi2/gyro` | N/A | Stateless module for interfacing with the MPU6050 gyro sensor. Outputs raw gyro and acceleration values to the MQTT topic. |
-| pitch_yaw_roll | `pi2/pitch_yaw_roll` | N/A | Stateless module for calculating the pitch, yaw, and roll of the smart cane using the raw gyro values. Outputs the calculated values to the MQTT topic. |
+| pitch_yaw_roll | `pi2/pitch_yaw_roll` | 1. `/calibrate` -> runs gyro calibration sequence. 2. `/zero` zeroes the pitch, yaw, and roll values and takes the current orientation as the "zero" orientation | Stateless module for calculating the pitch, yaw, and roll of the smart cane using the raw gyro values. Outputs the calculated values to the MQTT topic. |
 | vibration_motors | `pi2/vibration_motor_response` | N/A | Listens to system gateway vibration motor controller, outputs response to commands on MQTT topic. Each message is paired with a uuid4. |
